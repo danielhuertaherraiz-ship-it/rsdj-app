@@ -8,74 +8,89 @@
   <style>
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-      margin: 0;
+      background: #ffffff;
       padding: 16px;
-      background: #fff;
+      margin: 0;
     }
 
     h1 {
       margin-top: 0;
+      font-weight: 700;
     }
 
     textarea {
       width: 100%;
       min-height: 120px;
-      padding: 10px;
-      font-size: 14px;
+      padding: 12px;
+      font-size: 15px;
       box-sizing: border-box;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+    }
+
+    .buttons {
+      margin-top: 12px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
     }
 
     button {
-      margin-top: 10px;
-      padding: 8px 14px;
+      padding: 10px 16px;
       font-size: 14px;
+      border-radius: 999px;
+      border: none;
+      background: #f0f0f0;
       cursor: pointer;
     }
 
-    .box {
-      margin-top: 15px;
+    button:hover {
+      background: #e5e5e5;
+    }
+
+    #result {
+      margin-top: 14px;
       padding: 12px;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      background: #fafafa;
+      border: 1px solid #ddd;
+      border-radius: 8px;
       font-size: 14px;
+      background: #fafafa;
+      min-height: 20px;
     }
   </style>
 </head>
 
 <body>
 
-  <!-- ========================= -->
-  <!-- RSDJ ORIGINAL (SIN LFV) -->
-  <!-- ========================= -->
-
   <h1>RSDJ</h1>
 
   <textarea id="textInput" placeholder="Introduce aquí el texto a analizar..."></textarea>
 
-  <div>
+  <div class="buttons">
     <button id="analyzeBtn">Analizar texto</button>
+    <button id="lfvBtn">🧬 Analizar con LFV</button>
   </div>
 
-  <div id="rsdjResult" class="box"></div>
-
-  <!-- ========================= -->
-  <!-- JAVASCRIPT -->
-  <!-- ========================= -->
+  <!-- MISMO CONTENEDOR DE RESULTADOS PARA TODO -->
+  <div id="result"></div>
 
   <script>
     const API = "https://rsdj-api.onrender.com";
 
-    /* ---------- RSDJ (igual que antes) ---------- */
+    const textInput = document.getElementById("textInput");
+    const resultBox = document.getElementById("result");
+
+    /* =====================
+       RSDJ ORIGINAL
+       ===================== */
     document.getElementById("analyzeBtn").addEventListener("click", async () => {
-      const text = document.getElementById("textInput").value.trim();
+      const text = textInput.value.trim();
       if (!text) {
         alert("Introduce texto primero");
         return;
       }
 
-      const box = document.getElementById("rsdjResult");
-      box.innerHTML = "Analizando…";
+      resultBox.innerHTML = "Analizando…";
 
       try {
         const res = await fetch(API + "/analyze", {
@@ -86,81 +101,53 @@
 
         const data = await res.json();
 
-        box.innerHTML = `
+        resultBox.innerHTML = `
           <b>Hipótesis:</b> ${data.hipotesis}<br>
           <b>Entropía:</b> ${data.entropia}<br>
           <b>TTR:</b> ${data.ttr}<br>
           <b>Zipf:</b> ${data.zipf}
         `;
       } catch (e) {
-        box.innerHTML = "Error en el análisis";
+        resultBox.innerHTML = "Error en el análisis";
       }
     });
-  </script>
 
-  <!-- ================================================= -->
-  <!-- LFV ADD‑ON (NO TOCA NADA DE ARRIBA) -->
-  <!-- ================================================= -->
+    /* =====================
+       LFV (MISMO RESULT BOX)
+       ===================== */
+    document.getElementById("lfvBtn").addEventListener("click", async () => {
+      const text = textInput.value.trim();
+      if (!text) {
+        alert("Introduce texto primero");
+        return;
+      }
 
-  <script>
-    /*
-      LFV SE AÑADE DESPUÉS DE CARGAR LA PÁGINA
-      No modifica HTML existente
-      No rompe layout
-    */
+      resultBox.innerHTML = "Ejecutando LFV…";
 
-    window.addEventListener("load", () => {
-      const textInput = document.getElementById("textInput");
-      const mainBtn = document.getElementById("analyzeBtn");
-      if (!textInput || !mainBtn) return;
+      try {
+        const res = await fetch(API + "/lfv/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text })
+        });
 
-      /* Botón LFV */
-      const lfvBtn = document.createElement("button");
-      lfvBtn.textContent = "🧬 Analizar con LFV";
-      lfvBtn.style.marginLeft = "8px";
-      mainBtn.parentNode.appendChild(lfvBtn);
+        const data = await res.json();
 
-      /* Caja LFV */
-      const lfvBox = document.createElement("div");
-      lfvBox.className = "box";
-      lfvBox.style.display = "none";
-      mainBtn.parentNode.appendChild(lfvBox);
+        let html = "<b>LFV — Segmentación</b><ul>";
+        data.segments.forEach(s => {
+          html += `<li><b>${s.token}</b> → [${s.roles.join(", ")}] — ${s.function}</li>`;
+        });
+        html += "</ul><b>Síntesis</b><ul>";
 
-      lfvBtn.addEventListener("click", async () => {
-        const text = textInput.value.trim();
-        if (!text) {
-          alert("Introduce texto primero");
-          return;
+        for (const k in data.synthesis) {
+          html += `<li>${k}: ${data.synthesis[k]}</li>`;
         }
+        html += "</ul>";
 
-        lfvBox.style.display = "block";
-        lfvBox.innerHTML = "Ejecutando LFV…";
-
-        try {
-          const res = await fetch(API + "/lfv/analyze", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text })
-          });
-
-          const data = await res.json();
-
-          let html = "<b>LFV — Segmentación</b><ul>";
-          data.segments.forEach(s => {
-            html += `<li><b>${s.token}</b> → [${s.roles.join(", ")}] — ${s.function}</li>`;
-          });
-          html += "</ul><b>Síntesis</b><ul>";
-
-          for (const k in data.synthesis) {
-            html += `<li>${k}: ${data.synthesis[k]}</li>`;
-          }
-          html += "</ul>";
-
-          lfvBox.innerHTML = html;
-        } catch (e) {
-          lfvBox.innerHTML = "Error ejecutando LFV";
-        }
-      });
+        resultBox.innerHTML = html;
+      } catch (e) {
+        resultBox.innerHTML = "Error ejecutando LFV";
+      }
     });
   </script>
 
