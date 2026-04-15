@@ -1,9 +1,9 @@
 
-fastapi==0.111.0
-uvicorn==0.29.0
-sqlalchemy==2.0.29
-pydantic==2.7.1
-starlette==0.37.2
+fastapi==0.103.2
+uvicorn==0.23.2
+sqlalchemy==1.4.52
+pydantic==1.10.15
+starlette==0.27.0
 pillow
 pytesseract
 python-multipart
