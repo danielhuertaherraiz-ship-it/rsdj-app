@@ -1,112 +1,73 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<title>RSDJ — Análisis e Investigación Lingüística</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style>
-body { font-family: system-ui; background:#f4f6f8; padding:1rem; }
-.card { background:white; padding:1rem; border-radius:12px; margin-bottom:1rem; }
-textarea { width:100%; min-height:90px; }
-button { width:100%; padding:0.7rem; border-radius:10px; background:#2563eb; color:white; border:none; margin-top:0.5rem; }
-.result { background:#f5f7fa; padding:1rem; border-radius:10px; }
-.history { font-size:0.9em; margin-top:0.5rem; cursor:pointer; }
-hr { margin:1rem 0; }
-</style>
-</head>
+<!-- ========================= -->
+<!-- LFV (NO borra nada existente) -->
+<!-- ========================= -->
 
-<body>
-
-<h2>RSDJ</h2>
-
-<div class="card">
-<textarea id="textInput" placeholder="Introduce un texto"></textarea>
-<button onclick="analyze()">Analizar texto</button>
+<div style="margin-top:20px;">
+  <button id="lfvBtn">🧬 Analizar con LFV</button>
 </div>
 
-<div class="card result" id="result">Esperando análisis…</div>
-
-<div class="card">
-<button onclick="exportText()">Exportar análisis (TXT)</button>
-<button onclick="window.print()">Exportar análisis (PDF)</button>
-</div>
-
-<div class="card">
-<strong>Historial</strong>
-<div id="history"></div>
-</div>
-
-<div class="card">
-<strong>Comparación entre textos</strong>
-<textarea id="textA" placeholder="Texto A"></textarea>
-<textarea id="textB" placeholder="Texto B"></textarea>
-<button onclick="compare()">Comparar</button>
-<div id="comparisonResult"></div>
-</div>
+<div id="lfvResult" style="
+  margin-top:15px;
+  padding:12px;
+  border:1px solid #ccc;
+  border-radius:6px;
+  background:#fafafa;
+"></div>
 
 <script>
-const API="https://rsdj-api.onrender.com";
-let last=null;
+/* ===== LFV Frontend (aditivo, seguro) ===== */
 
-function show(d){
- last=d;
- document.getElementById("result").innerHTML=`
-<b>Hipótesis:</b> ${d.hipotesis}<br>
-Entropía: ${d.entropia}<br>
-Zipf: ${d.zipf}<br>
-TTR: ${d.ttr}<br>
-Bigramas: ${d.bigram_conc}<br>
-Trigramas: ${d.trigram_conc}`;
-}
+document.getElementById("lfvBtn").addEventListener("click", async () => {
+  const input = document.getElementById("textInput");
+  if (!input) {
+    alert("No se encuentra el textarea con id='textInput'");
+    return;
+  }
 
-async function analyze(){
- const t=document.getElementById("textInput").value;
- const r=await fetch(API+"/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:t})});
- const d=await r.json();
- show(d);
- loadHistory();
-}
+  const text = input.value.trim();
+  if (!text) {
+    alert("Introduce texto primero");
+    return;
+  }
 
-async function loadHistory(){
- const r=await fetch(API+"/history");
- const h=await r.json();
- document.getElementById("history").innerHTML=h.map(x=>`
-<div class="history" onclick="loadAnalysis(${x.id})">
-${x.created_at} — ${x.hypothesis}
-</div>`).join("");
-}
+  const box = document.getElementById("lfvResult");
+  box.innerHTML = "<em>Ejecutando LFV…</em>";
 
-async function loadAnalysis(id){
- const r=await fetch(API+"/analysis/"+id);
- const d=await r.json();
- show(d);
-}
+  try {
+    const res = await fetch("https://rsdj-api.onrender.com/lfv/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text })
+    });
 
-async function compare(){
- const a=await analyzeText(document.getElementById("textA").value);
- const b=await analyzeText(document.getElementById("textB").value);
- const dist=Math.sqrt(
- (a.entropia-b.entropia)**2+
- (a.zipf-b.zipf)**2+
- (a.ttr-b.ttr)**2
- ).toFixed(3);
- document.getElementById("comparisonResult").innerHTML=`Distancia estructural: ${dist}`;
-}
+    const data = await res.json();
 
-async function analyzeText(t){
- const r=await fetch(API+"/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:t})});
- return r.json();
-}
+    let html = "<h3>Resultado LFV</h3>";
 
-function exportText(){
- if(!last)return;
- const c=`RSDJ\nHipótesis:${last.hipotesis}\nEntropía:${last.entropia}\nZipf:${last.zipf}\nTTR:${last.ttr}`;
- const blob=new Blob([c],{type:"text/plain"});
- const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="rsdj.txt";a.click();
-}
+    html += "<h4>Segmentación funcional</h4><ul>";
+    data.segments.forEach(s => {
+      html += `
+        <li>
+          <b>${s.token}</b>
+          → [${s.roles.join(", ")}]
+          <br>
+          <em>${s.function}</em>
+        </li>
+      `;
+    });
+    html += "</ul>";
 
-loadHistory();
+    html += "<h4>Síntesis estructural</h4><ul>";
+    for (const k in data.synthesis) {
+      html += `<li><b>${k}</b>: ${data.synthesis[k]}</li>`;
+    }
+    html += "</ul>";
+
+    box.innerHTML = html;
+
+  } catch (err) {
+    console.error(err);
+    box.innerHTML = "<span style='color:red'>Error al ejecutar LFV</span>";
+  }
+});
 </script>
-
-</body>
-</html>
