@@ -1,159 +1,186 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>RSDJ</title>
-
-  <style>
-    body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-      background: #ffffff;
-      padding: 16px;
-      margin: 0;
-    }
-
-    h1 {
-      margin-top: 0;
-      font-size: 28px;
-    }
-
-    textarea {
-      width: 100%;
-      min-height: 120px;
-      padding: 12px;
-      font-size: 15px;
-      border-radius: 10px;
-      border: 1px solid #ddd;
-      box-sizing: border-box;
-    }
-
-    .buttons {
-      margin-top: 12px;
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    button {
-      padding: 10px 16px;
-      font-size: 14px;
-      border-radius: 999px;
-      border: none;
-      background: #f0f0f0;
-      cursor: pointer;
-    }
-
-    button:hover {
-      background: #e5e5e5;
-    }
-
-    #result {
-      margin-top: 14px;
-      padding: 12px;
-      border: 1px solid #ddd;
-      border-radius: 10px;
-      font-size: 14px;
-      background: #fafafa;
-      min-height: 20px;
-    }
-  </style>
+<meta charset="UTF-8">
+<title>RSDJ — Análisis e Investigación Lingüística</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+body { font-family: system-ui; background:#f4f6f8; padding:1rem; }
+.card { background:white; padding:1rem; border-radius:12px; margin-bottom:1rem; }
+textarea { width:100%; min-height:90px; }
+button {
+  width:100%;
+  padding:0.7rem;
+  border-radius:10px;
+  background:#2563eb;
+  color:white;
+  border:none;
+  margin-top:0.5rem;
+}
+.result { background:#f5f7fa; padding:1rem; border-radius:10px; }
+.history { font-size:0.9em; margin-top:0.5rem; cursor:pointer; }
+hr { margin:1rem 0; }
+</style>
 </head>
 
 <body>
 
-  <h1>RSDJ</h1>
+<h2>RSDJ</h2>
 
-  <textarea id="textInput" placeholder="Introduce aquí el texto a analizar..."></textarea>
+<div class="card">
+  <textarea id="textInput" placeholder="Introduce un texto"></textarea>
 
-  <div class="buttons">
-    <button id="analyzeBtn">Analizar texto</button>
-    <button id="lfvBtn">🧬 Analizar con LFV</button>
-  </div>
+  <!-- BOTÓN ORIGINAL -->
+  <button onclick="analyze()">Analizar texto</button>
 
-  <!-- MISMO CONTENEDOR PARA RSDJ Y LFV -->
-  <div id="result"></div>
+  <!-- ✅ BOTÓN LFV AÑADIDO (NO TOCA NADA MÁS) -->
+  <button onclick="analyzeLFV()">🧬 Analizar con LFV</button>
+</div>
 
-  <script>
-    const API = "https://rsdj-api.onrender.com";
+<div class="card result" id="result">Esperando análisis…</div>
 
-    const textInput = document.getElementById("textInput");
-    const resultBox = document.getElementById("result");
+<div class="card">
+  <button onclick="exportText()">Exportar análisis (TXT)</button>
+  <button onclick="window.print()">Exportar análisis (PDF)</button>
+</div>
 
-    /* =========================
-       RSDJ — /analyze
-       ========================= */
-    document.getElementById("analyzeBtn").addEventListener("click", async () => {
-      const text = textInput.value.trim();
-      if (!text) {
-        alert("Introduce texto primero");
-        return;
-      }
+<div class="card">
+  <strong>Historial</strong>
+  <div id="history"></div>
+</div>
 
-      resultBox.innerHTML = "Analizando…";
+<div class="card">
+  <strong>Comparación entre textos</strong>
+  <textarea id="textA" placeholder="Texto A"></textarea>
+  <textarea id="textB" placeholder="Texto B"></textarea>
+  <button onclick="compare()">Comparar</button>
+  <div id="comparisonResult"></div>
+</div>
 
-      try {
-        const res = await fetch(API + "/analyze", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text })
-        });
+<script>
+const API="https://rsdj-api.onrender.com";
+let last=null;
 
-        const data = await res.json();
+function show(d){
+  last=d;
+  document.getElementById("result").innerHTML=`
+  <b>Hipótesis:</b> ${d.hipotesis}<br>
+  Entropía: ${d.entropia}<br>
+  Zipf: ${d.zipf}<br>
+  TTR: ${d.ttr}<br>
+  Bigramas: ${d.bigram_conc}<br>
+  Trigramas: ${d.trigram_conc}`;
+}
 
-        resultBox.innerHTML = `
-          <b>Hipótesis:</b> ${data.hipotesis}<br>
-          <b>Entropía:</b> ${data.entropia}<br>
-          <b>TTR:</b> ${data.ttr}<br>
-          <b>Zipf:</b> ${data.zipf}<br>
-          <b>Repetición:</b> ${data.repeticion}<br>
-          <b>Bigramas:</b> ${data.bigram_conc}<br>
-          <b>Trigramas:</b> ${data.trigram_conc}
-        `;
-      } catch (e) {
-        resultBox.innerHTML = "Error en el análisis";
-      }
-    });
+/* ======================
+   RSDJ ORIGINAL
+   ====================== */
+async function analyze(){
+  const t=document.getElementById("textInput").value;
+  const r=await fetch(API+"/analyze",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({text:t})
+  });
+  const d=await r.json();
+  show(d);
+  loadHistory();
+}
 
-    /* =========================
-       LFV — /lfv/analyze
-       (usa el MISMO resultBox)
-       ========================= */
-    document.getElementById("lfvBtn").addEventListener("click", async () => {
-      const text = textInput.value.trim();
-      if (!text) {
-        alert("Introduce texto primero");
-        return;
-      }
+/* ======================
+   ✅ LFV AÑADIDO
+   ====================== */
+async function analyzeLFV(){
+  const t=document.getElementById("textInput").value;
+  if(!t){
+    alert("Introduce texto primero");
+    return;
+  }
 
-      resultBox.innerHTML = "Ejecutando LFV…";
+  document.getElementById("result").innerHTML="Ejecutando LFV…";
 
-      try {
-        const res = await fetch(API + "/lfv/analyze", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text })
-        });
+  const r=await fetch(API+"/lfv/analyze",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({text:t})
+  });
 
-        const data = await res.json();
+  const d=await r.json();
 
-        let html = "<b>LFV — Segmentación</b><ul>";
-        data.segments.forEach(s => {
-          html += `<li><b>${s.token}</b> → [${s.roles.join(", ")}] — ${s.function}</li>`;
-        });
-        html += "</ul><b>Síntesis</b><ul>";
+  let html="<b>LFV — Segmentación</b><ul>";
+  d.segments.forEach(s=>{
+    html+=`<li><b>${s.token}</b> → [${s.roles.join(", ")}] — ${s.function}</li>`;
+  });
+  html+="</ul><b>Síntesis</b><ul>";
 
-        for (const k in data.synthesis) {
-          html += `<li>${k}: ${data.synthesis[k]}</li>`;
-        }
-        html += "</ul>";
+  for(const k in d.synthesis){
+    html+=`<li>${k}: ${d.synthesis[k]}</li>`;
+  }
+  html+="</ul>";
 
-        resultBox.innerHTML = html;
-      } catch (e) {
-        resultBox.innerHTML = "Error ejecutando LFV";
-      }
-    });
-  </script>
+  document.getElementById("result").innerHTML=html;
+}
 
+/* ======================
+   HISTORIAL
+   ====================== */
+async function loadHistory(){
+  const r=await fetch(API+"/history");
+  const h=await r.json();
+  document.getElementById("history").innerHTML=h.map(x=>`
+    <div class="history" onclick="loadAnalysis(${x.id})">
+    ${x.created_at} — ${x.hypothesis}
+    </div>`).join("");
+}
+
+async function loadAnalysis(id){
+  const r=await fetch(API+"/analysis/"+id);
+  const d=await r.json();
+  show(d);
+}
+
+/* ======================
+   COMPARACIÓN
+   ====================== */
+async function compare(){
+  const a=await analyzeText(document.getElementById("textA").value);
+  const b=await analyzeText(document.getElementById("textB").value);
+  const dist=Math.sqrt(
+    (a.entropia-b.entropia)**2+
+    (a.zipf-b.zipf)**2+
+    (a.ttr-b.ttr)**2
+  ).toFixed(3);
+  document.getElementById("comparisonResult").innerHTML=
+    `Distancia estructural: ${dist}`;
+}
+
+async function analyzeText(t){
+  const r=await fetch(API+"/analyze",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({text:t})
+  });
+  return r.json();
+}
+
+/* ======================
+   EXPORTAR
+   ====================== */
+function exportText(){
+  if(!last)return;
+  const c=`RSDJ
+Hipótesis: ${last.hipotesis}
+Entropía: ${last.entropia}
+Zipf: ${last.zipf}
+TTR: ${last.ttr}`;
+  const blob=new Blob([c],{type:"text/plain"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="rsdj.txt";
+  a.click();
+}
+
+loadHistory();
+</script>
 </body>
 </html>
