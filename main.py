@@ -6,7 +6,6 @@ from collections import Counter
 from datetime import datetime
 import math, io
 import numpy as np
-
 from PIL import Image
 import pytesseract
 
@@ -30,7 +29,6 @@ DATABASE_URL = "sqlite:///./rsdj.db"
 engine = create_engine(
     DATABASE_URL, connect_args={"check_same_thread": False}
 )
-
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
@@ -46,6 +44,8 @@ class Analysis(Base):
     entropy = Column(Float)
     zipf = Column(Float)
     ttr = Column(Float)
+    bigram_conc = Column(Float)
+    trigram_conc = Column(Float)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 Base.metadata.create_all(bind=engine)
@@ -68,14 +68,21 @@ def zipf_score(words):
     freq = Counter(w.lower() for w in words)
     counts = np.array(sorted(freq.values(), reverse=True))
     ranks = np.arange(1, len(counts) + 1)
-    log_ranks = np.log(ranks)
-    log_counts = np.log(counts)
-    return round(np.corrcoef(log_ranks, log_counts)[0, 1], 3)
+    return round(np.corrcoef(np.log(ranks), np.log(counts))[0, 1], 3)
 
 def ttr_score(words):
     if not words:
         return 0.0
     return round(len(set(words)) / len(words), 3)
+
+def ngram_concentration(text: str, n: int, top_k: int = 5):
+    if len(text) < n:
+        return 0.0
+    ngrams = [text[i:i+n] for i in range(len(text) - n + 1)]
+    freq = Counter(ngrams)
+    total = sum(freq.values())
+    top = sum(c for _, c in freq.most_common(top_k))
+    return round(top / total, 3)
 
 # --------------------
 # ANALYSIS CORE
@@ -88,11 +95,13 @@ def analyze_and_store(text: str, source: str):
     ent = entropy("".join(words))
     zipf = zipf_score(words)
     ttr = ttr_score(words)
+    bigram_c = ngram_concentration(text.lower(), 2)
+    trigram_c = ngram_concentration(text.lower(), 3)
 
     hypothesis = "Estructura mixta"
-    if zipf and zipf < -0.9 and ttr > 0.4:
+    if zipf and zipf < -0.9 and ttr > 0.4 and bigram_c > 0.15:
         hypothesis = "Lenguaje natural probable"
-    elif ent > 4.5:
+    elif ent > 4.5 and bigram_c < 0.08:
         hypothesis = "Texto no lingüístico / cifrado"
     elif ttr < 0.25:
         hypothesis = "Texto repetitivo o simplificado"
@@ -107,12 +116,16 @@ def analyze_and_store(text: str, source: str):
         entropy=ent,
         zipf=zipf,
         ttr=ttr,
+        bigram_conc=bigram_c,
+        trigram_conc=trigram_c,
     )
     db.add(entry)
     db.commit()
+    db.refresh(entry)
     db.close()
 
     return {
+        "id": entry.id,
         "texto": text,
         "hipotesis": hypothesis,
         "longitud_media": avg,
@@ -120,6 +133,8 @@ def analyze_and_store(text: str, source: str):
         "entropia": ent,
         "zipf": zipf,
         "ttr": ttr,
+        "bigram_conc": bigram_c,
+        "trigram_conc": trigram_c,
     }
 
 # --------------------
@@ -163,4 +178,6 @@ def get_analysis(id: int):
         "entropia": r.entropy,
         "zipf": r.zipf,
         "ttr": r.ttr,
+        "bigram_conc": r.bigram_conc,
+        "trigram_conc": r.trigram_conc,
     }
