@@ -43,10 +43,6 @@
       font-size: 1em;
     }
 
-    input[type="file"] {
-      margin-top: 0.5rem;
-    }
-
     button {
       width: 100%;
       padding: 0.7rem;
@@ -90,6 +86,11 @@
       padding-top: 0.6rem;
       border-top: 1px solid #e5e7eb;
       font-size: 0.9em;
+      cursor: pointer;
+    }
+
+    .history-item:hover {
+      background: #f1f5f9;
     }
   </style>
 </head>
@@ -109,18 +110,10 @@
   <div id="textStatus" class="status"></div>
 </div>
 
-<!-- OCR -->
-<div class="card">
-  <strong>Analizar imagen (OCR)</strong>
-  <input type="file" id="imageInput" accept="image/*">
-  <button id="imageButton" onclick="analyzeImage()">Analizar imagen</button>
-  <div id="imageStatus" class="status"></div>
-</div>
-
 <!-- RESULTADO -->
 <div class="card">
   <div id="result" class="result-box">
-    <em>El resultado aparecerá aquí.</em>
+    <em>Selecciona un análisis o realiza uno nuevo.</em>
   </div>
 </div>
 
@@ -182,39 +175,6 @@
     setIdle(button);
   }
 
-  async function analyzeImage() {
-    const file = document.getElementById("imageInput").files[0];
-    const status = document.getElementById("imageStatus");
-    const button = document.getElementById("imageButton");
-
-    if (!file) return alert("Selecciona una imagen.");
-
-    setLoading(button, status, "⏳ Procesando imagen…");
-
-    const formData = new FormData();
-    formData.append("file", file);
-
-    try {
-      const res = await fetch(API + "/ocr", {
-        method: "POST",
-        body: formData
-      });
-      const data = await res.json();
-
-      if (!data.texto || data.texto.trim() === "") {
-        status.textContent = "⚠️ No se detectó texto.";
-      } else {
-        showResult(data);
-        status.textContent = "✅ OCR completado";
-        loadHistory();
-      }
-    } catch {
-      status.textContent = "❌ Error en OCR.";
-    }
-
-    setIdle(button);
-  }
-
   async function loadHistory() {
     const container = document.getElementById("historyList");
     container.textContent = "Cargando historial…";
@@ -229,7 +189,7 @@
       }
 
       container.innerHTML = data.map(item => `
-        <div class="history-item">
+        <div class="history-item" onclick="loadAnalysis(${item.id})">
           🕒 ${new Date(item.created_at).toLocaleString()}<br>
           🔍 ${item.hypothesis}<br>
           ⚙️ Entropía: ${item.entropy}
@@ -239,6 +199,22 @@
       container.textContent = "No se pudo cargar el historial.";
     }
   }
+
+  async function loadAnalysis(id) {
+    document.getElementById("result").innerHTML = "⏳ Cargando análisis…";
+
+    try {
+      const res = await fetch(API + "/analysis/" + id);
+      const data = await res.json();
+      showResult(data);
+    } catch {
+      document.getElementById("result").innerHTML =
+        "❌ No se pudo cargar el análisis.";
+    }
+  }
+
+  // Cargar historial al abrir
+  loadHistory();
 </script>
 
 </body>
