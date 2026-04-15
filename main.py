@@ -4,15 +4,19 @@ from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
 from sqlalchemy.orm import sessionmaker, declarative_base
 from collections import Counter
 from datetime import datetime
+from enum import Enum
+from dataclasses import dataclass
+from typing import List, Dict
 import math, io
 import numpy as np
 from PIL import Image
 import pytesseract
 
-# --------------------
+# ============================================================
 # APP
-# --------------------
-app = FastAPI(title="RSDJ Backend")
+# ============================================================
+
+app = FastAPI(title="RSDJ Backend + LFV")
 
 app.add_middleware(
     CORSMiddleware,
@@ -21,9 +25,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --------------------
+# ============================================================
 # DATABASE
-# --------------------
+# ============================================================
+
 DATABASE_URL = "sqlite:///./rsdj.db"
 
 engine = create_engine(
@@ -50,9 +55,10 @@ class Analysis(Base):
 
 Base.metadata.create_all(bind=engine)
 
-# --------------------
-# METRICS
-# --------------------
+# ============================================================
+# METRICS (RSDJ)
+# ============================================================
+
 def entropy(text: str) -> float:
     if not text:
         return 0.0
@@ -84,102 +90,113 @@ def ngram_concentration(text: str, n: int, top_k: int = 5):
     top = sum(c for _, c in freq.most_common(top_k))
     return round(top / total, 3)
 
-# --------------------
-# CONFIDENCE SYSTEM
-# --------------------
-def clamp(x, a=0.0, b=1.0):
-    return max(a, min(x, b))
+# ============================================================
+# LFV CORE (INTEGRADO)
+# ============================================================
 
-PRESETS = {
-    "general": {
-        "entropy": 0.25,
-        "zipf": 0.20,
-        "ttr": 0.20,
-        "repetition": 0.20,
-        "ngram": 0.15
-    },
-    "forense": {
-        "entropy": 0.30,
-        "zipf": 0.25,
-        "ttr": 0.15,
-        "repetition": 0.15,
-        "ngram": 0.15
-    },
-    "ia": {
-        "entropy": 0.20,
-        "zipf": 0.15,
-        "ttr": 0.30,
-        "repetition": 0.20,
-        "ngram": 0.15
-    }
-}
+class LFVState(Enum):
+    NACIMIENTO = "nacimiento"
+    CONSOLIDACION = "consolidacion"
+    EXPANSION = "expansion"
+    DENSIFICACION = "densificacion"
+    CIERRE = "cierre"
 
-def confidence_score(ent, zipf, ttr, repetition, bigram_c, trigram_c, preset="general"):
-    p = PRESETS.get(preset, PRESETS["general"])
+class LFVUnit(Enum):
+    F = "forma"
+    P = "proceso"
+    O = "operador"
+    M = "modificador"
+    C = "cierre"
 
-    entropy_s = clamp((ent - 2.5) / (4.8 - 2.5))
-    zipf_s = clamp((abs(zipf) - 0.6) / (1.0 - 0.6)) if zipf else 0.0
-    ttr_s = clamp((ttr - 0.2) / (0.6 - 0.2))
-    repetition_s = clamp(1 - repetition)
-    ngram_s = clamp(1 - ((bigram_c + trigram_c) / 2))
+@dataclass
+class LFVEvent:
+    unidad: str
+    token: str
+    efecto: str
 
-    score = (
-        p["entropy"] * entropy_s +
-        p["zipf"] * zipf_s +
-        p["ttr"] * ttr_s +
-        p["repetition"] * repetition_s +
-        p["ngram"] * ngram_s
-    )
+@dataclass
+class LFVSegment:
+    estado: str
+    eventos: List[LFVEvent]
+    efecto_estructural: str
 
-    if zipf is None:
-        score -= 0.05
-    if ent > 5.2 and ngram_s > 0.8:
-        score -= 0.1
-    if ttr < 0.2:
-        score -= 0.1
+class LFVEngine:
+    def __init__(self):
+        self.estado = LFVState.NACIMIENTO
+        self.segmentos: List[LFVSegment] = []
 
-    return round(clamp(score), 3)
+    def detectar_unidad(self, token: str) -> LFVUnit:
+        if token.endswith(("dy", "dain", "dam", "dal", "dor", "rodg")):
+            return LFVUnit.C
+        if token.startswith(("qo", "qok", "qot")):
+            return LFVUnit.O
+        if "aiin" in token or "oiin" in token:
+            return LFVUnit.P
+        if token.startswith(("sh", "ch", "kch", "cph", "tch", "ckh")):
+            return LFVUnit.M
+        return LFVUnit.F
 
-def confidence_label(score):
-    if score >= 0.85:
-        return "Muy alta confianza"
-    if score >= 0.70:
-        return "Alta confianza"
-    if score >= 0.50:
-        return "Confianza media"
-    if score >= 0.30:
-        return "Baja confianza"
-    return "No concluyente"
+    def transicion(self, unidad: LFVUnit):
+        if unidad == LFVUnit.F and self.estado == LFVState.NACIMIENTO:
+            self.estado = LFVState.CONSOLIDACION
+        elif unidad == LFVUnit.P:
+            self.estado = LFVState.EXPANSION
+        elif unidad == LFVUnit.M:
+            self.estado = LFVState.DENSIFICACION
+        elif unidad == LFVUnit.C:
+            self.estado = LFVState.CIERRE
 
-def confidence_explanation(ent, zipf, ttr, repetition, bigram_c, trigram_c):
-    exp = []
+    def analizar(self, texto: str) -> Dict:
+        self.estado = LFVState.NACIMIENTO
+        self.segmentos = []
 
-    if 3.2 <= ent <= 4.8:
-        exp.append("La entropía se sitúa en un rango típico del lenguaje estructurado.")
-    elif ent > 5.0:
-        exp.append("La entropía es elevada, compatible con estructura no lingüística.")
-    else:
-        exp.append("La entropía es baja, indicando repetición o simplificación.")
+        for seg in texto.replace("\n", " ").split("."):
+            tokens = seg.strip().split()
+            if not tokens:
+                continue
 
-    if zipf and abs(zipf) > 0.85:
-        exp.append("La distribución léxica sigue la ley de Zipf.")
-    else:
-        exp.append("La distribución léxica se desvía del patrón Zipf.")
+            eventos = []
+            for t in tokens:
+                u = self.detectar_unidad(t)
+                self.transicion(u)
+                eventos.append(
+                    LFVEvent(
+                        unidad=u.value,
+                        token=t,
+                        efecto=f"{u.value} → {self.estado.value}"
+                    )
+                )
 
-    if ttr < 0.25:
-        exp.append("La variedad léxica es reducida.")
-    else:
-        exp.append("La variedad léxica es adecuada.")
+            self.segmentos.append(
+                LFVSegment(
+                    estado=self.estado.value,
+                    eventos=eventos,
+                    efecto_estructural=f"Estado LFV fijado en {self.estado.value}"
+                )
+            )
 
-    if (bigram_c + trigram_c) / 2 > 0.2:
-        exp.append("Existe concentración significativa de n‑gramas.")
+        return {
+            "estado_inicial": LFVState.NACIMIENTO.value,
+            "estado_final": self.estado.value,
+            "segmentos": [
+                {
+                    "estado": s.estado,
+                    "eventos": [e.__dict__ for e in s.eventos],
+                    "efecto_estructural": s.efecto_estructural
+                } for s in self.segmentos
+            ],
+            "sintesis_LFV": (
+                "Ciclo LFV completo con cierre."
+                if self.estado == LFVState.CIERRE
+                else "Ciclo LFV abierto."
+            )
+        }
 
-    return exp
+# ============================================================
+# ANALYSIS CORE (RSDJ + LFV)
+# ============================================================
 
-# --------------------
-# ANALYSIS CORE
-# --------------------
-def analyze_and_store(text: str, source: str, preset="general"):
+def analyze_and_store(text: str, source: str):
     words = text.split()
 
     avg = round(sum(len(w) for w in words) / len(words), 2) if words else 0
@@ -191,14 +208,8 @@ def analyze_and_store(text: str, source: str, preset="general"):
     trigram_c = ngram_concentration(text.lower(), 3)
 
     hypothesis = "Estructura mixta"
-    if zipf and zipf < -0.9 and ttr > 0.4 and bigram_c > 0.15:
-        hypothesis = "Lenguaje natural probable"
-    elif ent > 4.5 and bigram_c < 0.08:
-        hypothesis = "Texto no lingüístico / cifrado"
-    elif ttr < 0.25:
-        hypothesis = "Texto repetitivo o simplificado"
 
-    conf = confidence_score(ent, zipf, ttr, rep, bigram_c, trigram_c, preset)
+    lfv_result = LFVEngine().analizar(text)
 
     db = SessionLocal()
     entry = Analysis(
@@ -220,65 +231,31 @@ def analyze_and_store(text: str, source: str, preset="general"):
 
     return {
         "id": entry.id,
-        "texto": text,
-        "hipotesis": hypothesis,
-        "preset": preset,
-        "confidence": conf,
-        "confidence_label": confidence_label(conf),
-        "confidence_explanation": confidence_explanation(
-            ent, zipf, ttr, rep, bigram_c, trigram_c
-        ),
-        "longitud_media": avg,
-        "repeticion": rep,
-        "entropia": ent,
-        "zipf": zipf,
-        "ttr": ttr,
-        "bigram_conc": bigram_c,
-        "trigram_conc": trigram_c,
+        "rsdj": {
+            "hipotesis": hypothesis,
+            "entropia": ent,
+            "zipf": zipf,
+            "ttr": ttr,
+            "bigram": bigram_c,
+            "trigram": trigram_c,
+        },
+        "lfv": lfv_result
     }
 
-# --------------------
+# ============================================================
 # ENDPOINTS
-# --------------------
+# ============================================================
+
 @app.post("/analyze")
 def analyze(data: dict):
-    preset = data.get("preset", "general")
-    return analyze_and_store(data["text"], source="text", preset=preset)
+    return analyze_and_store(data["text"], source="text")
+
+@app.post("/lfv/analyze")
+def analyze_lfv(data: dict):
+    return LFVEngine().analizar(data["text"])
 
 @app.post("/ocr")
 async def ocr(file: UploadFile = File(...)):
     image = Image.open(io.BytesIO(await file.read()))
     text = pytesseract.image_to_string(image, lang="spa+eng")
     return analyze_and_store(text, source="ocr")
-
-@app.get("/history")
-def history():
-    db = SessionLocal()
-    records = db.query(Analysis).order_by(Analysis.created_at.desc()).limit(20).all()
-    db.close()
-    return [
-        {
-            "id": r.id,
-            "hypothesis": r.hypothesis,
-            "entropy": r.entropy,
-            "created_at": r.created_at.isoformat(),
-        }
-        for r in records
-    ]
-
-@app.get("/analysis/{id}")
-def get_analysis(id: int):
-    db = SessionLocal()
-    r = db.query(Analysis).filter(Analysis.id == id).first()
-    db.close()
-    return {
-        "texto": r.text,
-        "hipotesis": r.hypothesis,
-        "longitud_media": r.avg_length,
-        "repeticion": r.repetition,
-        "entropia": r.entropy,
-        "zipf": r.zipf,
-        "ttr": r.ttr,
-        "bigram_conc": r.bigram_conc,
-        "trigram_conc": r.trigram_conc,
-    }
