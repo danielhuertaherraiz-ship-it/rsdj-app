@@ -60,7 +60,7 @@
     }
 
     button:disabled {
-      background: #999;
+      background: #9ca3af;
       cursor: not-allowed;
     }
 
@@ -68,6 +68,7 @@
       margin-top: 0.5rem;
       font-size: 0.9em;
       color: #555;
+      min-height: 1.2em;
     }
 
     .result-box {
@@ -101,7 +102,7 @@
   <div class="card">
     <strong>Analizar texto</strong>
     <textarea id="textInput" placeholder="Escribe o pega un texto aquí..."></textarea>
-    <button onclick="analyzeText()">Analizar texto</button>
+    <button id="textButton" onclick="analyzeText()">Analizar texto</button>
     <div id="textStatus" class="status"></div>
   </div>
 
@@ -109,7 +110,7 @@
   <div class="card">
     <strong>Analizar imagen (OCR)</strong>
     <input type="file" id="imageInput" accept="image/*">
-    <button onclick="analyzeImage()">Analizar imagen</button>
+    <button id="imageButton" onclick="analyzeImage()">Analizar imagen</button>
     <div id="imageStatus" class="status"></div>
   </div>
 
@@ -122,6 +123,15 @@
 
 <script>
   const API = "https://rsdj-api.onrender.com";
+
+  function setLoading(button, statusEl, message) {
+    button.disabled = true;
+    statusEl.textContent = message;
+  }
+
+  function setIdle(button) {
+    button.disabled = false;
+  }
 
   function showResult(data) {
     const result = document.getElementById("result");
@@ -144,13 +154,14 @@
   async function analyzeText() {
     const text = document.getElementById("textInput").value.trim();
     const status = document.getElementById("textStatus");
+    const button = document.getElementById("textButton");
 
     if (!text) {
       alert("Introduce un texto para analizar.");
       return;
     }
 
-    status.textContent = "Analizando texto…";
+    setLoading(button, status, "⏳ Analizando texto…");
 
     try {
       const res = await fetch(API + "/analyze", {
@@ -159,25 +170,31 @@
         body: JSON.stringify({ text })
       });
 
+      if (!res.ok) throw new Error("Error servidor");
+
       const data = await res.json();
       showResult(data);
-      status.textContent = "Análisis completado ✅";
+      status.textContent = "✅ Análisis completado";
 
     } catch (err) {
-      status.textContent = "Error al analizar el texto.";
+      status.textContent =
+        "❌ No se ha podido contactar con el servidor. Intenta de nuevo en unos segundos.";
     }
+
+    setIdle(button);
   }
 
   async function analyzeImage() {
     const fileInput = document.getElementById("imageInput");
     const status = document.getElementById("imageStatus");
+    const button = document.getElementById("imageButton");
 
     if (!fileInput.files.length) {
       alert("Selecciona una imagen.");
       return;
     }
 
-    status.textContent = "Procesando imagen…";
+    setLoading(button, status, "⏳ Procesando imagen…");
 
     const formData = new FormData();
     formData.append("file", fileInput.files[0]);
@@ -188,13 +205,25 @@
         body: formData
       });
 
+      if (!res.ok) throw new Error("Error OCR");
+
       const data = await res.json();
+
+      if (!data.texto || data.texto.trim().length === 0) {
+        status.textContent = "⚠️ No se ha detectado texto en la imagen.";
+        setIdle(button);
+        return;
+      }
+
       showResult(data);
-      status.textContent = "Análisis OCR completado ✅";
+      status.textContent = "✅ Análisis OCR completado";
 
     } catch (err) {
-      status.textContent = "Error al procesar la imagen.";
+      status.textContent =
+        "❌ Error al procesar la imagen. Intenta con otra más clara.";
     }
+
+    setIdle(button);
   }
 </script>
 
