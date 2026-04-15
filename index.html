@@ -2,176 +2,83 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#1d1b2f">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>RSDJ</title>
 
 <style>
-*{box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-body{margin:0;background:linear-gradient(180deg,#1d1b2f,#0f1120);color:#fff}
-.app{max-width:430px;margin:auto;min-height:100vh;display:flex;flex-direction:column}
-header{padding:16px;font-size:22px;font-weight:700;text-align:center}
-.view{display:none;padding:12px}
-.view.active{display:block}
-.card{background:rgba(255,255,255,.06);border-radius:18px;padding:16px;margin-bottom:12px}
-textarea,input{width:100%;background:rgba(255,255,255,.1);border:none;border-radius:14px;padding:14px;color:#fff}
-button{width:100%;background:linear-gradient(90deg,#ff8a00,#ffb347);border:none;border-radius:15px;padding:14px;font-size:15px;font-weight:600;margin-top:12px}
-.metric{margin-top:6px;font-size:14px;opacity:.85}
-nav{display:flex;justify-content:space-around;padding:12px;background:rgba(0,0,0,.45)}
-nav span{font-size:22px;opacity:.5;cursor:pointer}
-nav span.active{opacity:1}
-small{opacity:.6}
-hr{border:0;border-top:1px solid rgba(255,255,255,.15);margin:12px 0}
+body {
+  background:#0f1120;
+  color:#fff;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  padding:20px;
+}
+textarea,input {
+  width:100%;
+  padding:12px;
+  margin-top:10px;
+  border-radius:10px;
+  border:none;
+}
+button {
+  width:100%;
+  padding:14px;
+  margin-top:12px;
+  background:#ff8a00;
+  border:none;
+  border-radius:12px;
+  font-weight:bold;
+}
+pre {
+  background:#1d1b2f;
+  padding:12px;
+  margin-top:12px;
+  border-radius:10px;
+  white-space:pre-wrap;
+}
 </style>
 </head>
 
 <body>
-<div class="app">
 
-<header>RSDJ</header>
+<h2>RSDJ — Plataforma Lingüística</h2>
 
-<div id="home" class="view active"></div>
+<textarea id="text" placeholder="Introduce texto para analizar..."></textarea>
+<button onclick="analyzeText()">Analizar texto</button>
 
-<div id="analyze" class="view">
-  <div class="card">
-    <textarea id="input" rows="4" placeholder="Introduce texto para analizar…"></textarea>
-    <button onclick="runAnalysis()">Analizar texto</button>
-  </div>
+<input type="file" id="image" accept="image/*">
+<button onclick="analyzeImage()">Analizar imagen (OCR)</button>
 
-  <div class="card">
-    <input type="file" accept="image/*" capture="environment" onchange="runOCR(this)">
-    <small>📷 OCR desde imagen</small>
-  </div>
-</div>
-
-<div id="result" class="view">
-  <div class="card" id="resultBox"></div>
-</div>
-
-<div id="profile" class="view">
-  <div class="card">
-    <b>Perfil</b>
-    <div class="metric">Análisis guardados: <span id="count">0</span></div>
-    <button onclick="clearData()" style="background:#c0392b">Borrar datos</button>
-  </div>
-</div>
-
-<nav>
-  <span id="nav-home" class="active" onclick="show('home')">🏠</span>
-  <span id="nav-analyze" onclick="show('analyze')">➕</span>
-  <span id="nav-result" onclick="show('result')">📊</span>
-  <span id="nav-profile" onclick="show('profile')">👤</span>
-</nav>
-
-</div>
+<pre id="result"></pre>
 
 <script>
-/* ========== CONFIGURACIÓN BACKEND ==========
-   👇👇👇 CAMBIA ESTO 👇👇👇
-*/
-const API = "http://localhost:8000";
-/* Cuando lo tengas online será:
-const API = "https://TU-BACKEND";
-*/
+// ✅ URL DEL BACKEND (CAMBIA SOLO SI CAMBIA RENDER)
+const API = "https://rsdj-backend.onrender.com";
 
-/* ========== DATOS ========== */
-const STORAGE_KEY = "rsdj_posts_v1";
-let posts = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-
-/* ========== NAVEGACIÓN ========== */
-function show(view){
-  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
-  document.getElementById(view).classList.add('active');
-  document.querySelectorAll('nav span').forEach(n=>n.classList.remove('active'));
-  document.getElementById('nav-'+view).classList.add('active');
-  if(view==="home") renderFeed();
-}
-
-/* ========== BACKEND TEXTO ========== */
-async function runAnalysis(){
-  const text = document.getElementById("input").value.trim();
-  if(!text) return;
-
+async function analyzeText() {
+  const text = document.getElementById("text").value;
   const res = await fetch(API + "/analyze", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({text})
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({text})
   });
-
-  const post = await res.json();
-  post.time = new Date().toLocaleString();
-  posts.unshift(post);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(posts));
-  renderResult(post);
-  renderFeed();
-  document.getElementById("count").innerText = posts.length;
-  show("result");
+  document.getElementById("result").textContent =
+    JSON.stringify(await res.json(), null, 2);
 }
 
-/* ========== BACKEND OCR ========== */
-async function runOCR(input){
-  const file = input.files[0];
-  if(!file) return;
-
+async function analyzeImage() {
+  const f = document.getElementById("image").files[0];
+  if (!f) return alert("Selecciona una imagen");
   const form = new FormData();
-  form.append("file", file);
+  form.append("file", f);
 
   const res = await fetch(API + "/ocr", {
-    method: "POST",
-    body: form
+    method:"POST",
+    body:form
   });
-
-  const post = await res.json();
-  post.time = new Date().toLocaleString();
-  posts.unshift(post);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(posts));
-  renderResult(post);
-  renderFeed();
-  document.getElementById("count").innerText = posts.length;
-  show("result");
+  document.getElementById("result").textContent =
+    JSON.stringify(await res.json(), null, 2);
 }
-
-/* ========== UI ========== */
-function renderResult(p){
-  document.getElementById("resultBox").innerHTML = `
-    <b>${p.hipotesis}</b>
-    <div class="metric">📏 Longitud media: ${p.longitud_media}</div>
-    <div class="metric">🔁 Repetición: ${p.repeticion}</div>
-    <div class="metric">🧮 Entropía: ${p.entropia}</div>
-    <hr>
-    <b>Lenguaje funcional</b>
-    <div class="metric">${p.particulas.join(", ") || "No claro"}</div>
-    <hr>
-    <small>${p.time}</small>
-  `;
-}
-
-function renderFeed(){
-  const feed = document.getElementById("home");
-  feed.innerHTML = "";
-  if(posts.length === 0){
-    feed.innerHTML = '<div class="card">No hay análisis todavía.</div>';
-    return;
-  }
-  posts.forEach(p=>{
-    const c = document.createElement("div");
-    c.className="card";
-    c.innerHTML = `<b>${p.hipotesis}</b><div class="metric">${p.texto || ""}</div>`;
-    c.onclick = ()=>{ renderResult(p); show("result"); };
-    feed.appendChild(c);
-  });
-}
-
-function clearData(){
-  localStorage.clear();
-  posts = [];
-  renderFeed();
-  document.getElementById("count").innerText = 0;
-  show("home");
-}
-
-renderFeed();
-document.getElementById("count").innerText = posts.length;
 </script>
+
 </body>
 </html>
