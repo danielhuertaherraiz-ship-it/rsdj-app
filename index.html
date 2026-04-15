@@ -2,269 +2,51 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>RSDJ — Análisis e Investigación Lingüística</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
+<title>RSDJ + LFV</title>
 <style>
 body { font-family: system-ui; background:#f4f6f8; padding:1rem; }
-.card { background:white; padding:1rem; border-radius:12px; margin-bottom:1rem; }
-textarea { width:100%; min-height:90px; }
-button {
-  width:100%;
-  padding:0.7rem;
-  border-radius:10px;
-  background:#2563eb;
-  color:white;
-  border:none;
-  margin-top:0.5rem;
-}
-.result { background:#f5f7fa; padding:1rem; border-radius:10px; }
-.history { font-size:0.9em; margin-top:0.5rem; cursor:pointer; }
-hr { margin:1rem 0; }
-input[type="file"] { margin-top:0.5rem; }
-select { width:100%; padding:0.5rem; border-radius:8px; margin:0.5rem 0; }
-
-/* Barra de confianza */
-.conf-bar { margin-top:0.4rem; background:#e5e7eb; border-radius:999px; height:12px; overflow:hidden; }
-.conf-fill { height:100%; }
-.conf-low { background:#dc2626; }
-.conf-mid { background:#f59e0b; }
-.conf-high { background:#16a34a; }
+.card { background:#fff; padding:1rem; border-radius:10px; margin-bottom:1rem; }
+textarea { width:100%; min-height:100px; }
+button { padding:0.6rem 1rem; margin-top:0.5rem; }
+pre { background:#f0f2f5; padding:1rem; border-radius:8px; }
 </style>
 </head>
-
 <body>
 
-<h2>RSDJ</h2>
+<h2>RSDJ — Análisis y LFV</h2>
 
-<!-- TEXTO -->
 <div class="card">
-  <textarea id="textInput" placeholder="Introduce un texto"></textarea>
-
-  <select id="presetSelect">
-    <option value="general">Modo general</option>
-    <option value="forense">Modo forense</option>
-    <option value="ia">Modo detección IA</option>
-  </select>
-
-  <button onclick="analyze()">Analizar texto</button>
-  <button onclick="analyzeLFV()">🧬 Analizar con LFV</button>
+<textarea id="textInput" placeholder="Introduce texto"></textarea>
+<br>
+<button onclick="analyze()">Analizar</button>
+<button onclick="analyzeLFV()">Analizar LFV</button>
 </div>
 
-<!-- OCR -->
 <div class="card">
-  <strong>Análisis desde imagen (OCR)</strong>
-  <input type="file" id="imageInput" accept="image/*">
-  <button onclick="analyzeImage()">Analizar imagen</button>
-</div>
-
-<!-- RESULTADO -->
-<div class="card result" id="result">Esperando análisis…</div>
-
-<!-- EXPORT -->
-<div class="card">
-  <button onclick="exportText()">Exportar análisis (TXT)</button>
-  <button onclick="window.print()">Exportar análisis (PDF)</button>
-</div>
-
-<!-- HISTORIAL -->
-<div class="card">
-  <strong>Historial</strong>
-  <div id="history"></div>
-</div>
-
-<!-- COMPARACIÓN -->
-<div class="card">
-  <strong>Comparación entre textos</strong>
-  <textarea id="textA" placeholder="Texto A"></textarea>
-  <textarea id="textB" placeholder="Texto B"></textarea>
-  <button onclick="compare()">Comparar</button>
-  <div id="comparisonResult"></div>
+<pre id="result">Esperando análisis…</pre>
 </div>
 
 <script>
-const API="https://rsdj-api.onrender.com";
-let last=null;
+const API = "http://127.0.0.1:8000";
 
-/* ===============================
-   TRADUCCIÓN FUNCIONAL (OFICIAL)
-   =============================== */
-function functionalTranslation(d){
-  if(!d || d.confidence === undefined) return "";
-
-  if(d.hipotesis.includes("Lenguaje natural")){
-    return "Texto con estructura lingüística coherente, distribución léxica regular y variabilidad interna compatible con lenguaje natural.";
-  }
-
-  if(d.hipotesis.includes("no lingüístico")){
-    return "Texto no lingüístico desde el punto de vista semántico, pero con estructura interna organizada y patrones funcionales consistentes.";
-  }
-
-  if(d.hipotesis.includes("repetitivo")){
-    return "Texto con alta repetición estructural, baja variabilidad léxica y función probablemente mecánica o procedimental.";
-  }
-
-  return "Texto con estructura mixta, combinando rasgos lingüísticos y no lingüísticos sin un patrón funcional dominante.";
-}
-
-/* =====================================
-   TRADUCCIÓN SEMÁNTICA (ORIENTATIVA ⚠️)
-   ===================================== */
-function semanticTranslation(d){
-  if(!d || d.confidence === undefined) return "";
-
-  if(d.confidence < 0.4){
-    return "La estructura del texto no permite una interpretación semántica fiable.";
-  }
-
-  if(d.hipotesis.includes("Lenguaje natural")){
-    return "La estructura es compatible con un texto descriptivo o expositivo, posiblemente informativo o narrativo.";
-  }
-
-  if(d.hipotesis.includes("no lingüístico")){
-    return "La organización del texto es compatible con un sistema técnico, simbólico o procedimental más que con un discurso semántico convencional.";
-  }
-
-  if(d.hipotesis.includes("repetitivo")){
-    return "La estructura sugiere un uso funcional repetitivo, como instrucciones, listados o secuencias automáticas.";
-  }
-
-  return "La estructura sugiere un contenido híbrido sin un campo semántico dominante claramente identificable.";
-}
-
-/* ===============================
-   MOSTRAR RESULTADO
-   =============================== */
-function show(d){
-  last = d;
-
-  let confidenceHTML="";
-  if(d.confidence !== undefined){
-    const pct=Math.round(d.confidence*100);
-    let cls=pct>=70?"conf-high":pct>=40?"conf-mid":"conf-low";
-
-    confidenceHTML=`
-      <hr>
-      <b>Confianza estructural:</b> ${d.confidence} (${d.confidence_label})
-      <div class="conf-bar"><div class="conf-fill ${cls}" style="width:${pct}%"></div></div>
-      <ul>${(d.confidence_explanation||[]).map(e=>`<li>${e}</li>`).join("")}</ul>
-    `;
-  }
-
-  document.getElementById("result").innerHTML=`
-    <b>Hipótesis:</b> ${d.hipotesis}<br>
-    Entropía: ${d.entropia}<br>
-    Zipf: ${d.zipf}<br>
-    TTR: ${d.ttr}<br>
-    Bigramas: ${d.bigram_conc}<br>
-    Trigramas: ${d.trigram_conc}
-    ${confidenceHTML}
-    <hr>
-    <b>Traducción funcional</b><br>
-    <i>${functionalTranslation(d)}</i>
-    <hr>
-    <b>Traducción semántica (orientativa)</b><br>
-    <i>${semanticTranslation(d)}</i>
-    <small><br>Nota: interpretación semántica orientativa basada en estructura, no traducción literal.</small>
-  `;
-}
-
-/* TEXTO */
 async function analyze(){
-  const r=await fetch(API+"/analyze",{
+  const r = await fetch(API + "/analyze", {
     method:"POST",
     headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({
-      text:textInput.value,
-      preset:presetSelect.value
-    })
+    body: JSON.stringify({text: textInput.value})
   });
-  show(await r.json());
-  loadHistory();
+  result.textContent = JSON.stringify(await r.json(), null, 2);
 }
 
-/* LFV */
 async function analyzeLFV(){
-  if(!textInput.value){alert("Introduce texto primero");return;}
-  result.innerHTML="Ejecutando LFV…";
-  const r=await fetch(API+"/lfv/analyze",{
+  const r = await fetch(API + "/lfv/translate", {
     method:"POST",
     headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({text:textInput.value})
+    body: JSON.stringify({text: textInput.value})
   });
-  const d=await r.json();
-  let html="<b>LFV — Segmentación</b><ul>";
-  d.segments.forEach(s=>{
-    html+=`<li><b>${s.token}</b> → ${s.function}</li>`;
-  });
-  html+="</ul>";
-  result.innerHTML=html;
+  result.textContent = JSON.stringify(await r.json(), null, 2);
 }
-
-/* OCR */
-async function analyzeImage(){
-  if(!imageInput.files[0]){alert("Selecciona imagen");return;}
-  result.innerHTML="Procesando imagen…";
-  const f=new FormData();
-  f.append("file",imageInput.files[0]);
-  const r=await fetch(API+"/ocr",{method:"POST",body:f});
-  show(await r.json());
-  loadHistory();
-}
-
-/* HISTORIAL */
-async function loadHistory(){
-  const r=await fetch(API+"/history");
-  const h=await r.json();
-  history.innerHTML=h.map(x=>`
-    <div class="history" onclick="loadAnalysis(${x.id})">
-      ${x.created_at} — ${x.hypothesis}
-    </div>`).join("");
-}
-async function loadAnalysis(id){
-  const r=await fetch(API+"/analysis/"+id);
-  show(await r.json());
-}
-
-/* COMPARAR */
-async function compare(){
-  const a=await analyzeText(textA.value);
-  const b=await analyzeText(textB.value);
-  comparisonResult.innerHTML="Distancia estructural: "+
-    Math.sqrt(
-      (a.entropia-b.entropia)**2+
-      (a.zipf-b.zipf)**2+
-      (a.ttr-b.ttr)**2
-    ).toFixed(3);
-}
-async function analyzeText(t){
-  const r=await fetch(API+"/analyze",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({text:t})
-  });
-  return r.json();
-}
-
-/* EXPORT */
-function exportText(){
-  if(!last)return;
-  const c=`RSDJ
-Hipótesis:${last.hipotesis}
-Confianza:${last.confidence}
-Entropía:${last.entropia}
-Zipf:${last.zipf}
-TTR:${last.ttr}
-Traducción funcional:${functionalTranslation(last)}
-Traducción semántica:${semanticTranslation(last)}`;
-  const b=new Blob([c],{type:"text/plain"});
-  const a=document.createElement("a");
-  a.href=URL.createObjectURL(b);
-  a.download="rsdj.txt";
-  a.click();
-}
-
-loadHistory();
 </script>
+
 </body>
 </html>
