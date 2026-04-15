@@ -29,12 +29,7 @@ hr { margin:1rem 0; }
 
 <div class="card">
   <textarea id="textInput" placeholder="Introduce un texto"></textarea>
-
-  <!-- BOTÓN ORIGINAL -->
   <button onclick="analyze()">Analizar texto</button>
-
-  <!-- ✅ BOTÓN LFV AÑADIDO (NO TOCA NADA MÁS) -->
-  <button onclick="analyzeLFV()">🧬 Analizar con LFV</button>
 </div>
 
 <div class="card result" id="result">Esperando análisis…</div>
@@ -61,19 +56,37 @@ hr { margin:1rem 0; }
 const API="https://rsdj-api.onrender.com";
 let last=null;
 
+/* ======================
+   MOSTRAR RESULTADO
+   ====================== */
 function show(d){
   last=d;
+
+  let confidenceHTML = "";
+  if (d.confidence !== undefined) {
+    confidenceHTML = `
+      <hr>
+      <b>Confianza estructural:</b> ${d.confidence}<br>
+      <b>Nivel:</b> ${d.confidence_label}
+      <ul>
+        ${(d.confidence_explanation || []).map(e => `<li>${e}</li>`).join("")}
+      </ul>
+    `;
+  }
+
   document.getElementById("result").innerHTML=`
-  <b>Hipótesis:</b> ${d.hipotesis}<br>
-  Entropía: ${d.entropia}<br>
-  Zipf: ${d.zipf}<br>
-  TTR: ${d.ttr}<br>
-  Bigramas: ${d.bigram_conc}<br>
-  Trigramas: ${d.trigram_conc}`;
+    <b>Hipótesis:</b> ${d.hipotesis}<br>
+    Entropía: ${d.entropia}<br>
+    Zipf: ${d.zipf}<br>
+    TTR: ${d.ttr}<br>
+    Bigramas: ${d.bigram_conc}<br>
+    Trigramas: ${d.trigram_conc}
+    ${confidenceHTML}
+  `;
 }
 
 /* ======================
-   RSDJ ORIGINAL
+   ANALYZE
    ====================== */
 async function analyze(){
   const t=document.getElementById("textInput").value;
@@ -88,40 +101,6 @@ async function analyze(){
 }
 
 /* ======================
-   ✅ LFV AÑADIDO
-   ====================== */
-async function analyzeLFV(){
-  const t=document.getElementById("textInput").value;
-  if(!t){
-    alert("Introduce texto primero");
-    return;
-  }
-
-  document.getElementById("result").innerHTML="Ejecutando LFV…";
-
-  const r=await fetch(API+"/lfv/analyze",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({text:t})
-  });
-
-  const d=await r.json();
-
-  let html="<b>LFV — Segmentación</b><ul>";
-  d.segments.forEach(s=>{
-    html+=`<li><b>${s.token}</b> → [${s.roles.join(", ")}] — ${s.function}</li>`;
-  });
-  html+="</ul><b>Síntesis</b><ul>";
-
-  for(const k in d.synthesis){
-    html+=`<li>${k}: ${d.synthesis[k]}</li>`;
-  }
-  html+="</ul>";
-
-  document.getElementById("result").innerHTML=html;
-}
-
-/* ======================
    HISTORIAL
    ====================== */
 async function loadHistory(){
@@ -129,7 +108,7 @@ async function loadHistory(){
   const h=await r.json();
   document.getElementById("history").innerHTML=h.map(x=>`
     <div class="history" onclick="loadAnalysis(${x.id})">
-    ${x.created_at} — ${x.hypothesis}
+      ${x.created_at} — ${x.hypothesis}
     </div>`).join("");
 }
 
@@ -164,12 +143,13 @@ async function analyzeText(t){
 }
 
 /* ======================
-   EXPORTAR
+   EXPORT
    ====================== */
 function exportText(){
   if(!last)return;
   const c=`RSDJ
 Hipótesis: ${last.hipotesis}
+Confianza: ${last.confidence ?? "N/A"}
 Entropía: ${last.entropia}
 Zipf: ${last.zipf}
 TTR: ${last.ttr}`;
@@ -182,5 +162,6 @@ TTR: ${last.ttr}`;
 
 loadHistory();
 </script>
+
 </body>
 </html>
