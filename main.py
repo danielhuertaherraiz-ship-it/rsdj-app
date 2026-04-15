@@ -1,8 +1,7 @@
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from collections import Counter
-import math
-import io
+import math, io
 from PIL import Image
 import pytesseract
 
@@ -15,45 +14,45 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def calcular_entropia(texto):
-    freq = Counter(texto)
-    total = len(texto)
+def entropy(text):
+    freq = Counter(text)
+    total = len(text)
     if total == 0:
         return 0
     return round(-sum((c/total)*math.log2(c/total) for c in freq.values()), 3)
 
-def analizar_texto(texto):
-    palabras = texto.split()
-    long_media = round(sum(len(p) for p in palabras) / len(palabras), 2)
-    repeticion = round(1 - len(set(palabras)) / len(palabras), 2)
-    entropia = calcular_entropia("".join(palabras))
+def analyze_text(text):
+    words = text.split()
+    avg = round(sum(len(w) for w in words) / len(words), 2)
+    rep = round(1 - len(set(words)) / len(words), 2)
+    ent = entropy("".join(words))
 
-    freq = Counter(p.lower() for p in palabras)
-    particulas = [w for w, c in freq.items() if len(w) <= 3 and c > 1]
+    freq = Counter(w.lower() for w in words)
+    particles = [w for w,c in freq.items() if len(w)<=3 and c>1][:8]
 
-    hipotesis = "Estructura mixta"
-    if long_media < 4 and repeticion < 0.3:
-        hipotesis = "Lengua aislante probable"
-    elif long_media > 7 and repeticion > 0.4:
-        hipotesis = "Lengua aglutinante probable"
-    elif entropia > 4.5:
-        hipotesis = "Texto cifrado / no lingüístico"
+    hypothesis = "Estructura mixta"
+    if avg < 4 and rep < 0.3:
+        hypothesis = "Lengua aislante probable"
+    elif avg > 7 and rep > 0.4:
+        hypothesis = "Lengua aglutinante probable"
+    elif ent > 4.5:
+        hypothesis = "Texto cifrado / no lingüístico"
 
     return {
-        "texto": texto,
-        "hipotesis": hipotesis,
-        "longitud_media": long_media,
-        "repeticion": repeticion,
-        "entropia": entropia,
-        "particulas": particulas[:8],
+        "texto": text,
+        "hipotesis": hypothesis,
+        "longitud_media": avg,
+        "repeticion": rep,
+        "entropia": ent,
+        "particulas": particles
     }
 
 @app.post("/analyze")
 def analyze(data: dict):
-    return analizar_texto(data["text"])
+    return analyze_text(data["text"])
 
 @app.post("/ocr")
 async def ocr(file: UploadFile = File(...)):
-    imagen = Image.open(io.BytesIO(await file.read()))
-    texto = pytesseract.image_to_string(imagen, lang="spa+eng")
-    return analizar_texto(texto)
+    image = Image.open(io.BytesIO(await file.read()))
+    text = pytesseract.image_to_string(image, lang="spa+eng")
+    return analyze_text(text)
