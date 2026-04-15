@@ -1,0 +1,9 @@
+{
+  "name": "RSDJ",
+  "short_name": "RSDJ",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0f1120",
+  "theme_color": "#1d1b2f",
+  "orientation": "portrait"
+}

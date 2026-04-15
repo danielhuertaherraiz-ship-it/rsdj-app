@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#1d1b2f" />
+<link rel="manifest" href="manifest.json" />
+<title>RSDJ</title>
+
+<style>
+*{box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+body{margin:0;background:linear-gradient(180deg,#1d1b2f,#0f1120);color:#fff}
+.app{max-width:430px;margin:auto;min-height:100vh;display:flex;flex-direction:column}
+header{padding:18px;font-size:22px;font-weight:700}
+.card{background:rgba(255,255,255,.06);border-radius:20px;padding:16px;margin:12px}
+textarea{width:100%;background:rgba(255,255,255,.1);border:none;border-radius:14px;padding:14px;color:#fff;font-size:15px}
+button{width:100%;margin-top:12px;background:linear-gradient(90deg,#ff8a00,#ffb347);border:none;border-radius:16px;padding:14px;font-size:16px;font-weight:600}
+.metric{margin-top:6px;font-size:14px;opacity:.85}
+nav{display:flex;justify-content:space-around;padding:14px;background:rgba(0,0,0,.4)}
+nav span{font-size:20px;opacity:.6} nav .active{opacity:1}
+</style>
+</head>
+
+<body>
+<div class="app">
+<header>RSDJ</header>
+
+<div class="card">
+<textarea id="text" rows="4" placeholder="Introduce texto para análisis…"></textarea>
+<button onclick="analyze()">Analizar</button>
+<div id="result"></div>
+</div>
+
+<nav>
+<span class="active">🏠</span><span>➕</span><span>🔍</span><span>👤</span>
+</nav>
+</div>
+
+<script>
+function entropy(t){
+  const f={}; for(let c of t) f[c]=(f[c]||0)+1;
+  let e=0,n=t.length;
+  for(let c in f){let p=f[c]/n; e-=p*Math.log2(p);}
+  return e.toFixed(3);
+}
+function analyze(){
+  const t=document.getElementById("text").value.trim();
+  const r=document.getElementById("result");
+  if(!t){r.innerHTML="Introduce texto primero."; return;}
+  const w=t.split(/\s+/);
+  const avg=(w.reduce((a,x)=>a+x.length,0)/w.length).toFixed(2);
+  const rep=(1-new Set(w).size/w.length).toFixed(2);
+  const ent=entropy(w.join(""));
+  let h="Estructura mixta";
+  if(avg<4&&rep<0.3) h="Lengua aislante probable";
+  else if(avg>7&&rep>0.4) h="Lengua aglutinante probable";
+  else if(avg>=4&&avg<=7&&ent>3.5) h="Lengua flexiva probable";
+  else if(ent>4.5) h="Texto cifrado / no lingüístico";
+  r.innerHTML=`<b>${h}</b>
+  <div class="metric">📏 Longitud media: ${avg}</div>
+  <div class="metric">🔁 Repetición: ${rep}</div>
+  <div class="metric">🧮 Entropía: ${ent}</div>`;
+}
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.register("service-worker.js");
+}
+</script>
+</body>
+</html>
+``
