@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <title>RSDJ — Análisis e Investigación Lingüística</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <style>
 body { font-family: system-ui; background:#f4f6f8; padding:1rem; }
 .card { background:white; padding:1rem; border-radius:12px; margin-bottom:1rem; }
@@ -21,6 +22,19 @@ button {
 .history { font-size:0.9em; margin-top:0.5rem; cursor:pointer; }
 hr { margin:1rem 0; }
 input[type="file"] { margin-top:0.5rem; }
+
+/* Barra de confianza */
+.conf-bar {
+  margin-top:0.4rem;
+  background:#e5e7eb;
+  border-radius:999px;
+  height:12px;
+  overflow:hidden;
+}
+.conf-fill { height:100%; transition:width 0.4s ease; }
+.conf-low { background:#dc2626; }
+.conf-mid { background:#f59e0b; }
+.conf-high { background:#16a34a; }
 </style>
 </head>
 
@@ -70,23 +84,30 @@ input[type="file"] { margin-top:0.5rem; }
 const API="https://rsdj-api.onrender.com";
 let last=null;
 
-/* MOSTRAR RESULTADO */
+/* MOSTRAR RESULTADO RSDJ */
 function show(d){
   last=d;
 
   let confidenceHTML="";
   if(d.confidence!==undefined){
+    const pct=Math.round(d.confidence*100);
+    let cls="conf-low";
+    if(pct>=70) cls="conf-high";
+    else if(pct>=40) cls="conf-mid";
+
     confidenceHTML=`
       <hr>
-      <b>Confianza estructural:</b> ${d.confidence}<br>
-      <b>Nivel:</b> ${d.confidence_label}
+      <b>Confianza estructural:</b> ${d.confidence} (${d.confidence_label})
+      <div class="conf-bar">
+        <div class="conf-fill ${cls}" style="width:${pct}%"></div>
+      </div>
       <ul>
         ${(d.confidence_explanation||[]).map(e=>`<li>${e}</li>`).join("")}
       </ul>
     `;
   }
 
-  document.getElementById("result").innerHTML=`
+  result.innerHTML=`
     <b>Hipótesis:</b> ${d.hipotesis}<br>
     Entropía: ${d.entropia}<br>
     Zipf: ${d.zipf}<br>
@@ -99,11 +120,10 @@ function show(d){
 
 /* TEXTO */
 async function analyze(){
-  const t=textInput.value;
   const r=await fetch(API+"/analyze",{
     method:"POST",
     headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({text:t})
+    body:JSON.stringify({text:textInput.value})
   });
   show(await r.json());
   loadHistory();
@@ -111,16 +131,13 @@ async function analyze(){
 
 /* LFV */
 async function analyzeLFV(){
-  const t=textInput.value;
-  if(!t){alert("Introduce texto primero");return;}
+  if(!textInput.value){alert("Introduce texto primero");return;}
   result.innerHTML="Ejecutando LFV…";
-
   const r=await fetch(API+"/lfv/analyze",{
     method:"POST",
     headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({text:t})
+    body:JSON.stringify({text:textInput.value})
   });
-
   const d=await r.json();
   let html="<b>LFV — Segmentación</b><ul>";
   d.segments.forEach(s=>{
@@ -136,10 +153,10 @@ async function analyzeLFV(){
 
 /* OCR */
 async function analyzeImage(){
-  const file=imageInput.files[0];
-  if(!file){alert("Selecciona imagen");return;}
+  if(!imageInput.files[0]){alert("Selecciona imagen");return;}
   result.innerHTML="Procesando imagen…";
-  const f=new FormData(); f.append("file",file);
+  const f=new FormData();
+  f.append("file",imageInput.files[0]);
   const r=await fetch(API+"/ocr",{method:"POST",body:f});
   show(await r.json());
   loadHistory();
@@ -163,12 +180,13 @@ async function loadAnalysis(id){
 async function compare(){
   const a=await analyzeText(textA.value);
   const b=await analyzeText(textB.value);
-  const d=Math.sqrt(
-    (a.entropia-b.entropia)**2+
-    (a.zipf-b.zipf)**2+
-    (a.ttr-b.ttr)**2
-  ).toFixed(3);
-  comparisonResult.innerHTML=`Distancia estructural: ${d}`;
+  comparisonResult.innerHTML=
+    "Distancia estructural: "+
+    Math.sqrt(
+      (a.entropia-b.entropia)**2+
+      (a.zipf-b.zipf)**2+
+      (a.ttr-b.ttr)**2
+    ).toFixed(3);
 }
 async function analyzeText(t){
   const r=await fetch(API+"/analyze",{
