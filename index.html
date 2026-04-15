@@ -28,35 +28,36 @@ input[type="file"] { margin-top:0.5rem; }
 
 <h2>RSDJ</h2>
 
-<!-- ================= TEXTO MANUAL ================= -->
+<!-- TEXTO -->
 <div class="card">
   <textarea id="textInput" placeholder="Introduce un texto"></textarea>
   <button onclick="analyze()">Analizar texto</button>
+  <button onclick="analyzeLFV()">🧬 Analizar con LFV</button>
 </div>
 
-<!-- ================= OCR ================= -->
+<!-- OCR -->
 <div class="card">
   <strong>Análisis desde imagen (OCR)</strong>
   <input type="file" id="imageInput" accept="image/*">
   <button onclick="analyzeImage()">Analizar imagen</button>
 </div>
 
-<!-- ================= RESULTADO ================= -->
+<!-- RESULTADO -->
 <div class="card result" id="result">Esperando análisis…</div>
 
-<!-- ================= EXPORT ================= -->
+<!-- EXPORT -->
 <div class="card">
   <button onclick="exportText()">Exportar análisis (TXT)</button>
   <button onclick="window.print()">Exportar análisis (PDF)</button>
 </div>
 
-<!-- ================= HISTORIAL ================= -->
+<!-- HISTORIAL -->
 <div class="card">
   <strong>Historial</strong>
   <div id="history"></div>
 </div>
 
-<!-- ================= COMPARACIÓN ================= -->
+<!-- COMPARACIÓN -->
 <div class="card">
   <strong>Comparación entre textos</strong>
   <textarea id="textA" placeholder="Texto A"></textarea>
@@ -69,18 +70,18 @@ input[type="file"] { margin-top:0.5rem; }
 const API="https://rsdj-api.onrender.com";
 let last=null;
 
-/* ================= MOSTRAR RESULTADO ================= */
+/* MOSTRAR RESULTADO */
 function show(d){
   last=d;
 
-  let confidenceHTML = "";
-  if (d.confidence !== undefined) {
-    confidenceHTML = `
+  let confidenceHTML="";
+  if(d.confidence!==undefined){
+    confidenceHTML=`
       <hr>
       <b>Confianza estructural:</b> ${d.confidence}<br>
       <b>Nivel:</b> ${d.confidence_label}
       <ul>
-        ${(d.confidence_explanation || []).map(e => `<li>${e}</li>`).join("")}
+        ${(d.confidence_explanation||[]).map(e=>`<li>${e}</li>`).join("")}
       </ul>
     `;
   }
@@ -96,71 +97,79 @@ function show(d){
   `;
 }
 
-/* ================= TEXTO MANUAL ================= */
+/* TEXTO */
 async function analyze(){
-  const t=document.getElementById("textInput").value;
+  const t=textInput.value;
   const r=await fetch(API+"/analyze",{
     method:"POST",
     headers:{"Content-Type":"application/json"},
     body:JSON.stringify({text:t})
   });
-  const d=await r.json();
-  show(d);
+  show(await r.json());
   loadHistory();
 }
 
-/* ================= OCR ================= */
-async function analyzeImage(){
-  const file=document.getElementById("imageInput").files[0];
-  if(!file){
-    alert("Selecciona una imagen primero");
-    return;
-  }
+/* LFV */
+async function analyzeLFV(){
+  const t=textInput.value;
+  if(!t){alert("Introduce texto primero");return;}
+  result.innerHTML="Ejecutando LFV…";
 
-  document.getElementById("result").innerHTML="Procesando imagen y OCR…";
-
-  const form=new FormData();
-  form.append("file",file);
-
-  const r=await fetch(API+"/ocr",{
+  const r=await fetch(API+"/lfv/analyze",{
     method:"POST",
-    body:form
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({text:t})
   });
 
   const d=await r.json();
-  show(d);
+  let html="<b>LFV — Segmentación</b><ul>";
+  d.segments.forEach(s=>{
+    html+=`<li><b>${s.token}</b> → [${s.roles.join(", ")}] — ${s.function}</li>`;
+  });
+  html+="</ul><b>Síntesis</b><ul>";
+  for(const k in d.synthesis){
+    html+=`<li>${k}: ${d.synthesis[k]}</li>`;
+  }
+  html+="</ul>";
+  result.innerHTML=html;
+}
+
+/* OCR */
+async function analyzeImage(){
+  const file=imageInput.files[0];
+  if(!file){alert("Selecciona imagen");return;}
+  result.innerHTML="Procesando imagen…";
+  const f=new FormData(); f.append("file",file);
+  const r=await fetch(API+"/ocr",{method:"POST",body:f});
+  show(await r.json());
   loadHistory();
 }
 
-/* ================= HISTORIAL ================= */
+/* HISTORIAL */
 async function loadHistory(){
   const r=await fetch(API+"/history");
   const h=await r.json();
-  document.getElementById("history").innerHTML=h.map(x=>`
+  history.innerHTML=h.map(x=>`
     <div class="history" onclick="loadAnalysis(${x.id})">
       ${x.created_at} — ${x.hypothesis}
     </div>`).join("");
 }
-
 async function loadAnalysis(id){
   const r=await fetch(API+"/analysis/"+id);
-  const d=await r.json();
-  show(d);
+  show(await r.json());
 }
 
-/* ================= COMPARACIÓN ================= */
+/* COMPARAR */
 async function compare(){
-  const a=await analyzeText(document.getElementById("textA").value);
-  const b=await analyzeText(document.getElementById("textB").value);
-  const dist=Math.sqrt(
+  const a=await analyzeText(textA.value);
+  const b=await analyzeText(textB.value);
+  const d=Math.sqrt(
     (a.entropia-b.entropia)**2+
     (a.zipf-b.zipf)**2+
     (a.ttr-b.ttr)**2
   ).toFixed(3);
-  document.getElementById("comparisonResult").innerHTML=
-    `Distancia estructural: ${dist}`;
+  comparisonResult.innerHTML=`Distancia estructural: ${d}`;
 }
-
 async function analyzeText(t){
   const r=await fetch(API+"/analyze",{
     method:"POST",
@@ -170,18 +179,18 @@ async function analyzeText(t){
   return r.json();
 }
 
-/* ================= EXPORT ================= */
+/* EXPORT */
 function exportText(){
   if(!last)return;
   const c=`RSDJ
-Hipótesis: ${last.hipotesis}
-Confianza: ${last.confidence ?? "N/A"}
-Entropía: ${last.entropia}
-Zipf: ${last.zipf}
-TTR: ${last.ttr}`;
-  const blob=new Blob([c],{type:"text/plain"});
+Hipótesis:${last.hipotesis}
+Confianza:${last.confidence}
+Entropía:${last.entropia}
+Zipf:${last.zipf}
+TTR:${last.ttr}`;
+  const b=new Blob([c],{type:"text/plain"});
   const a=document.createElement("a");
-  a.href=URL.createObjectURL(blob);
+  a.href=URL.createObjectURL(b);
   a.download="rsdj.txt";
   a.click();
 }
