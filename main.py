@@ -162,4 +162,3 @@ def history(db: Session = Depends(get_db)):
         }
         for r in records
     ]
-``
