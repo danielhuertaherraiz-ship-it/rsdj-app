@@ -20,6 +20,7 @@ button {
 .result { background:#f5f7fa; padding:1rem; border-radius:10px; }
 .history { font-size:0.9em; margin-top:0.5rem; cursor:pointer; }
 hr { margin:1rem 0; }
+input[type="file"] { margin-top:0.5rem; }
 </style>
 </head>
 
@@ -27,23 +28,35 @@ hr { margin:1rem 0; }
 
 <h2>RSDJ</h2>
 
+<!-- ================= TEXTO MANUAL ================= -->
 <div class="card">
   <textarea id="textInput" placeholder="Introduce un texto"></textarea>
   <button onclick="analyze()">Analizar texto</button>
 </div>
 
+<!-- ================= OCR ================= -->
+<div class="card">
+  <strong>Análisis desde imagen (OCR)</strong>
+  <input type="file" id="imageInput" accept="image/*">
+  <button onclick="analyzeImage()">Analizar imagen</button>
+</div>
+
+<!-- ================= RESULTADO ================= -->
 <div class="card result" id="result">Esperando análisis…</div>
 
+<!-- ================= EXPORT ================= -->
 <div class="card">
   <button onclick="exportText()">Exportar análisis (TXT)</button>
   <button onclick="window.print()">Exportar análisis (PDF)</button>
 </div>
 
+<!-- ================= HISTORIAL ================= -->
 <div class="card">
   <strong>Historial</strong>
   <div id="history"></div>
 </div>
 
+<!-- ================= COMPARACIÓN ================= -->
 <div class="card">
   <strong>Comparación entre textos</strong>
   <textarea id="textA" placeholder="Texto A"></textarea>
@@ -56,9 +69,7 @@ hr { margin:1rem 0; }
 const API="https://rsdj-api.onrender.com";
 let last=null;
 
-/* ======================
-   MOSTRAR RESULTADO
-   ====================== */
+/* ================= MOSTRAR RESULTADO ================= */
 function show(d){
   last=d;
 
@@ -85,9 +96,7 @@ function show(d){
   `;
 }
 
-/* ======================
-   ANALYZE
-   ====================== */
+/* ================= TEXTO MANUAL ================= */
 async function analyze(){
   const t=document.getElementById("textInput").value;
   const r=await fetch(API+"/analyze",{
@@ -100,9 +109,30 @@ async function analyze(){
   loadHistory();
 }
 
-/* ======================
-   HISTORIAL
-   ====================== */
+/* ================= OCR ================= */
+async function analyzeImage(){
+  const file=document.getElementById("imageInput").files[0];
+  if(!file){
+    alert("Selecciona una imagen primero");
+    return;
+  }
+
+  document.getElementById("result").innerHTML="Procesando imagen y OCR…";
+
+  const form=new FormData();
+  form.append("file",file);
+
+  const r=await fetch(API+"/ocr",{
+    method:"POST",
+    body:form
+  });
+
+  const d=await r.json();
+  show(d);
+  loadHistory();
+}
+
+/* ================= HISTORIAL ================= */
 async function loadHistory(){
   const r=await fetch(API+"/history");
   const h=await r.json();
@@ -118,9 +148,7 @@ async function loadAnalysis(id){
   show(d);
 }
 
-/* ======================
-   COMPARACIÓN
-   ====================== */
+/* ================= COMPARACIÓN ================= */
 async function compare(){
   const a=await analyzeText(document.getElementById("textA").value);
   const b=await analyzeText(document.getElementById("textB").value);
@@ -142,9 +170,7 @@ async function analyzeText(t){
   return r.json();
 }
 
-/* ======================
-   EXPORT
-   ====================== */
+/* ================= EXPORT ================= */
 function exportText(){
   if(!last)return;
   const c=`RSDJ
@@ -162,6 +188,5 @@ TTR: ${last.ttr}`;
 
 loadHistory();
 </script>
-
 </body>
 </html>
