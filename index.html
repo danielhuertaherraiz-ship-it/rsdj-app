@@ -21,6 +21,7 @@ nav{display:flex;justify-content:space-around;padding:12px;background:rgba(0,0,0
 nav span{font-size:22px;opacity:.5;cursor:pointer}
 nav span.active{opacity:1}
 small{opacity:.6}
+hr{border:0;border-top:1px solid rgba(255,255,255,.15);margin:12px 0}
 </style>
 </head>
 
@@ -32,7 +33,7 @@ small{opacity:.6}
 <!-- FEED -->
 <div id="home" class="view active"></div>
 
-<!-- ANALIZAR TEXTO -->
+<!-- ANALIZAR -->
 <div id="analyze" class="view">
   <div class="card">
     <textarea id="input" rows="4" placeholder="Introduce texto para analizar…"></textarea>
@@ -41,7 +42,7 @@ small{opacity:.6}
 
   <div class="card">
     <input type="file" accept="image/*" capture="environment" onchange="runOCR(this)">
-    <small>📷 Analizar texto desde imagen (OCR)</small>
+    <small>📷 OCR desde imagen (flujo básico)</small>
   </div>
 </div>
 
@@ -53,8 +54,11 @@ small{opacity:.6}
 <!-- PERFIL -->
 <div id="profile" class="view">
   <div class="card">
-    <b>Perfil</b><br>
-    Análisis realizados: <span id="count">0</span>
+    <b>Perfil</b>
+    <div class="metric">Análisis guardados: <span id="count">0</span></div>
+    <button onclick="clearData()" style="background:#c0392b;margin-top:10px">
+      Borrar todos los datos
+    </button>
   </div>
 </div>
 
@@ -68,9 +72,40 @@ small{opacity:.6}
 </div>
 
 <script>
+/* =========================
+   PERSISTENCIA
+========================= */
+const STORAGE_KEY = "rsdj_posts_v1";
+
 let posts = [];
 
-/* NAVEGACIÓN */
+function loadPosts(){
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if(saved){
+    try {
+      posts = JSON.parse(saved);
+    } catch(e){
+      posts = [];
+    }
+  }
+}
+
+function savePosts(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(posts));
+}
+
+function clearData(){
+  if(!confirm("¿Seguro que quieres borrar todos los análisis?")) return;
+  localStorage.removeItem(STORAGE_KEY);
+  posts = [];
+  renderFeed();
+  document.getElementById("count").innerText = 0;
+  show("home");
+}
+
+/* =========================
+   NAVEGACIÓN
+========================= */
 function show(view){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.getElementById(view).classList.add('active');
@@ -79,7 +114,9 @@ function show(view){
   if(view==="home") renderFeed();
 }
 
-/* ENTROPÍA */
+/* =========================
+   ANÁLISIS
+========================= */
 function entropy(text){
   const f={}; for(let c of text)f[c]=(f[c]||0)+1;
   let e=0,n=text.length;
@@ -87,7 +124,6 @@ function entropy(text){
   return e.toFixed(3);
 }
 
-/* ANÁLISIS */
 function analyzeText(text){
   const words=text.split(/\s+/);
   const avg=(words.reduce((a,w)=>a+w.length,0)/words.length).toFixed(2);
@@ -105,18 +141,76 @@ function analyzeText(text){
   else if(avg>7&&rep>0.4)h="Lengua aglutinante probable";
   else if(ent>4.5)h="Texto cifrado / no lingüístico";
 
-  return {text,h,avg,rep,ent,particles,time:new Date().toLocaleString()};
+  return {
+    id: Date.now(),
+    text,
+    h, avg, rep, ent, particles,
+    time: new Date().toLocaleString()
+  };
 }
 
-/* EJECUCIÓN TEXTO */
 function runAnalysis(){
   const text=document.getElementById('input').value.trim();
-  if(!text)return;
-  const post=analyzeText(text);
+  if(!text) return;
+  const post = analyzeText(text);
   posts.unshift(post);
+  savePosts();
   renderResult(post);
-  document.getElementById('count').innerText = posts.length;
-  show('result');
+  document.getElementById("count").innerText = posts.length;
+  show("result");
 }
 
-/* OCR CON CÁMARA */
+/* =========================
+   OCR (flujo básico)
+========================= */
+function runOCR(input){
+  alert("OCR automático llegará en el siguiente paso con backend.\nPor ahora iOS reconoce texto al copiar.\nCaptura, copia y pega arriba.");
+}
+
+/* =========================
+   RENDER
+========================= */
+function renderResult(p){
+  document.getElementById('resultBox').innerHTML=`
+    <b>${p.h}</b>
+    <div class="metric">📏 Longitud media: ${p.avg}</div>
+    <div class="metric">🔁 Repetición: ${p.rep}</div>
+    <div class="metric">🧮 Entropía: ${p.ent}</div>
+    <hr>
+    <b>Lenguaje funcional</b>
+    <div class="metric">${p.particles.join(", ")||"No claro"}</div>
+    <hr>
+    <small>${p.time}</small>
+  `;
+}
+
+function renderFeed(){
+  const feed=document.getElementById('home');
+  feed.innerHTML='';
+  if(posts.length===0){
+    feed.innerHTML='<div class="card">No hay análisis todavía.</div>';
+    return;
+  }
+  posts.forEach(p=>{
+    const card=document.createElement("div");
+    card.className="card";
+    card.innerHTML=`
+      <b>${p.h}</b>
+      <div class="metric">${p.text.slice(0,100)}...</div>
+      <small>${p.time}</small>
+    `;
+    card.onclick=()=>{renderResult(p);show('result')};
+    feed.appendChild(card);
+  });
+}
+
+/* =========================
+   INICIALIZACIÓN
+========================= */
+loadPosts();
+document.getElementById("count").innerText = posts.length;
+renderFeed();
+</script>
+</body>
+</html>
+``
