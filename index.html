@@ -2,58 +2,142 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>RSDJ — Investigación lingüística</title>
+<title>RSDJ — Comparación lingüística</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <style>
-body { font-family: system-ui; background:#f4f6f8; padding:1rem; }
-.card { background:white; padding:1rem; border-radius:12px; margin-bottom:1rem; }
-button { width:100%; padding:0.7rem; border-radius:10px; border:none; background:#2563eb; color:white; }
-.result { background:#f5f7fa; padding:1rem; border-radius:10px; }
-.hint { font-size:0.85em; color:#555; margin-top:0.4rem; }
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  background:#f4f6f8;
+  padding:1rem;
+}
+h2 { text-align:center; }
+.card {
+  background:white;
+  padding:1rem;
+  border-radius:12px;
+  margin-bottom:1rem;
+}
+textarea {
+  width:100%;
+  min-height:90px;
+  margin-bottom:0.5rem;
+}
+button {
+  width:100%;
+  padding:0.7rem;
+  border-radius:10px;
+  border:none;
+  background:#2563eb;
+  color:white;
+}
+.result {
+  background:#f5f7fa;
+  padding:1rem;
+  border-radius:10px;
+}
+.hint {
+  font-size:0.9em;
+  color:#555;
+  margin-top:0.5rem;
+}
+.metric {
+  margin-top:0.4rem;
+}
 </style>
 </head>
 
 <body>
 
-<h2>RSDJ — Análisis lingüístico</h2>
+<h2>RSDJ — Comparación entre textos</h2>
 
 <div class="card">
-<textarea id="textInput" placeholder="Introduce un texto..."></textarea>
-<button onclick="analyze()">Analizar</button>
+  <strong>Texto A</strong>
+  <textarea id="textA" placeholder="Pega aquí el primer texto"></textarea>
 </div>
 
-<div class="card result" id="result">Esperando análisis…</div>
+<div class="card">
+  <strong>Texto B</strong>
+  <textarea id="textB" placeholder="Pega aquí el segundo texto"></textarea>
+</div>
+
+<div class="card">
+  <button onclick="compareTexts()">Comparar textos</button>
+</div>
+
+<div class="card result" id="result">
+  <em>Introduce dos textos y pulsa “Comparar”.</em>
+</div>
 
 <script>
 const API = "https://rsdj-api.onrender.com";
 
-function analyze() {
-  fetch(API + "/analyze", {
+async function analyze(text) {
+  const res = await fetch(API + "/analyze", {
     method:"POST",
     headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({text:document.getElementById("textInput").value})
-  })
-  .then(r=>r.json())
-  .then(d=>{
-    document.getElementById("result").innerHTML = `
-      <b>Hipótesis:</b> ${d.hipotesis}<br>
-      <b>Entropía:</b> ${d.entropia}<br>
-      <b>Zipf:</b> ${d.zipf ?? "insuficiente"}<br>
-      <b>TTR:</b> ${d.ttr}<br>
-      <div class="hint">
-        ${
-          d.zipf && d.zipf < -0.9
-          ? "Cumple la Ley de Zipf → patrón lingüístico natural."
-          : "Se desvía de Zipf → posible texto artificial."
-        }<br>
-        ${
-          d.ttr > 0.4
-          ? "Alta diversidad léxica."
-          : "Diversidad léxica baja."
-        }
-      </div>
-    `;
+    body:JSON.stringify({text})
   });
+  return res.json();
+}
+
+function distance(a, b) {
+  const keys = ["entropia", "zipf", "ttr", "bigram_conc", "trigram_conc"];
+  let sum = 0;
+
+  keys.forEach(k => {
+    if (a[k] !== null && b[k] !== null) {
+      sum += Math.pow(a[k] - b[k], 2);
+    }
+  });
+
+  return Math.sqrt(sum).toFixed(3);
+}
+
+async function compareTexts() {
+  const a = document.getElementById("textA").value.trim();
+  const b = document.getElementById("textB").value.trim();
+  const out = document.getElementById("result");
+
+  if (!a || !b) {
+    alert("Introduce ambos textos.");
+    return;
+  }
+
+  out.innerHTML = "⏳ Analizando textos…";
+
+  try {
+    const A = await analyze(a);
+    const B = await analyze(b);
+    const d = distance(A, B);
+
+    let interpretation = "Textos estructuralmente distintos.";
+    if (d < 0.4) interpretation = "Textos muy similares estructuralmente.";
+    else if (d < 0.8) interpretation = "Textos moderadamente similares.";
+
+    out.innerHTML = `
+      <strong>Resultado de la comparación</strong><br><br>
+
+      <div class="metric"><b>Distancia estructural:</b> ${d}</div>
+      <div class="hint">${interpretation}</div>
+
+      <hr>
+
+      <div class="metric"><b>Texto A:</b> ${A.hipotesis}</div>
+      <div class="metric">Entropía: ${A.entropia}</div>
+      <div class="metric">Zipf: ${A.zipf}</div>
+      <div class="metric">TTR: ${A.ttr}</div>
+
+      <hr>
+
+      <div class="metric"><b>Texto B:</b> ${B.hipotesis}</div>
+      <div class="metric">Entropía: ${B.entropia}</div>
+      <div class="metric">Zipf: ${B.zipf}</div>
+      <div class="metric">TTR: ${B.ttr}</div>
+    `;
+  } catch {
+    out.innerHTML = "❌ Error al comparar textos.";
+  }
 }
 </script>
 
