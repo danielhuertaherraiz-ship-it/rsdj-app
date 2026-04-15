@@ -79,54 +79,64 @@
       font-size: 0.95em;
     }
 
-    .result-box strong {
-      font-size: 1.1em;
-    }
-
     .hint {
-      margin-top: 0.5rem;
+      margin-top: 0.4rem;
       font-size: 0.85em;
       color: #666;
+    }
+
+    .history-item {
+      margin-top: 0.6rem;
+      padding-top: 0.6rem;
+      border-top: 1px solid #e5e7eb;
+      font-size: 0.9em;
     }
   </style>
 </head>
 
 <body>
 
-  <h1>RSDJ</h1>
-  <div class="subtitle">
-    Análisis lingüístico automático · Texto y OCR
-  </div>
+<h1>RSDJ</h1>
+<div class="subtitle">
+  Análisis lingüístico automático · Texto y OCR
+</div>
 
-  <!-- TEXTO -->
-  <div class="card">
-    <strong>Analizar texto</strong>
-    <textarea id="textInput" placeholder="Escribe o pega un texto aquí..."></textarea>
-    <button id="textButton" onclick="analyzeText()">Analizar texto</button>
-    <div id="textStatus" class="status"></div>
-  </div>
+<!-- TEXTO -->
+<div class="card">
+  <strong>Analizar texto</strong>
+  <textarea id="textInput" placeholder="Escribe o pega un texto aquí..."></textarea>
+  <button id="textButton" onclick="analyzeText()">Analizar texto</button>
+  <div id="textStatus" class="status"></div>
+</div>
 
-  <!-- OCR -->
-  <div class="card">
-    <strong>Analizar imagen (OCR)</strong>
-    <input type="file" id="imageInput" accept="image/*">
-    <button id="imageButton" onclick="analyzeImage()">Analizar imagen</button>
-    <div id="imageStatus" class="status"></div>
-  </div>
+<!-- OCR -->
+<div class="card">
+  <strong>Analizar imagen (OCR)</strong>
+  <input type="file" id="imageInput" accept="image/*">
+  <button id="imageButton" onclick="analyzeImage()">Analizar imagen</button>
+  <div id="imageStatus" class="status"></div>
+</div>
 
-  <!-- RESULTADO -->
-  <div class="card">
-    <div id="result" class="result-box">
-      <em>El resultado aparecerá aquí.</em>
-    </div>
+<!-- RESULTADO -->
+<div class="card">
+  <div id="result" class="result-box">
+    <em>El resultado aparecerá aquí.</em>
   </div>
+</div>
+
+<!-- HISTORIAL -->
+<div class="card">
+  <strong>Historial reciente</strong>
+  <button onclick="loadHistory()">Actualizar historial</button>
+  <div id="historyList" class="hint"></div>
+</div>
 
 <script>
   const API = "https://rsdj-api.onrender.com";
 
-  function setLoading(button, statusEl, message) {
+  function setLoading(button, statusEl, msg) {
     button.disabled = true;
-    statusEl.textContent = message;
+    statusEl.textContent = msg;
   }
 
   function setIdle(button) {
@@ -134,19 +144,14 @@
   }
 
   function showResult(data) {
-    const result = document.getElementById("result");
-
-    result.innerHTML = `
+    document.getElementById("result").innerHTML = `
       <strong>Resultado del análisis</strong><br><br>
-
       🔍 <strong>Hipótesis:</strong> ${data.hipotesis}<br>
-      📏 <strong>Longitud media de palabra:</strong> ${data.longitud_media}<br>
-      🔁 <strong>Repetición léxica:</strong> ${data.repeticion}<br>
-      ⚙️ <strong>Entropía:</strong> ${data.entropia}<br>
-
+      📏 <strong>Longitud media:</strong> ${data.longitud_media}<br>
+      🔁 <strong>Repetición:</strong> ${data.repeticion}<br>
+      ⚙️ <strong>Entropía:</strong> ${data.entropia}
       <div class="hint">
-        Interpretación automática basada en patrones de longitud,
-        repetición y complejidad estructural del texto.
+        Interpretación automática basada en estructura y complejidad.
       </div>
     `;
   }
@@ -156,74 +161,83 @@
     const status = document.getElementById("textStatus");
     const button = document.getElementById("textButton");
 
-    if (!text) {
-      alert("Introduce un texto para analizar.");
-      return;
-    }
+    if (!text) return alert("Introduce un texto.");
 
     setLoading(button, status, "⏳ Analizando texto…");
 
     try {
       const res = await fetch(API + "/analyze", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {"Content-Type": "application/json"},
         body: JSON.stringify({ text })
       });
-
-      if (!res.ok) throw new Error("Error servidor");
-
       const data = await res.json();
       showResult(data);
       status.textContent = "✅ Análisis completado";
-
-    } catch (err) {
-      status.textContent =
-        "❌ No se ha podido contactar con el servidor. Intenta de nuevo en unos segundos.";
+      loadHistory();
+    } catch {
+      status.textContent = "❌ Error al contactar con el servidor.";
     }
 
     setIdle(button);
   }
 
   async function analyzeImage() {
-    const fileInput = document.getElementById("imageInput");
+    const file = document.getElementById("imageInput").files[0];
     const status = document.getElementById("imageStatus");
     const button = document.getElementById("imageButton");
 
-    if (!fileInput.files.length) {
-      alert("Selecciona una imagen.");
-      return;
-    }
+    if (!file) return alert("Selecciona una imagen.");
 
     setLoading(button, status, "⏳ Procesando imagen…");
 
     const formData = new FormData();
-    formData.append("file", fileInput.files[0]);
+    formData.append("file", file);
 
     try {
       const res = await fetch(API + "/ocr", {
         method: "POST",
         body: formData
       });
-
-      if (!res.ok) throw new Error("Error OCR");
-
       const data = await res.json();
 
-      if (!data.texto || data.texto.trim().length === 0) {
-        status.textContent = "⚠️ No se ha detectado texto en la imagen.";
-        setIdle(button);
-        return;
+      if (!data.texto || data.texto.trim() === "") {
+        status.textContent = "⚠️ No se detectó texto.";
+      } else {
+        showResult(data);
+        status.textContent = "✅ OCR completado";
+        loadHistory();
       }
-
-      showResult(data);
-      status.textContent = "✅ Análisis OCR completado";
-
-    } catch (err) {
-      status.textContent =
-        "❌ Error al procesar la imagen. Intenta con otra más clara.";
+    } catch {
+      status.textContent = "❌ Error en OCR.";
     }
 
     setIdle(button);
+  }
+
+  async function loadHistory() {
+    const container = document.getElementById("historyList");
+    container.textContent = "Cargando historial…";
+
+    try {
+      const res = await fetch(API + "/history");
+      const data = await res.json();
+
+      if (!data.length) {
+        container.textContent = "No hay análisis todavía.";
+        return;
+      }
+
+      container.innerHTML = data.map(item => `
+        <div class="history-item">
+          🕒 ${new Date(item.created_at).toLocaleString()}<br>
+          🔍 ${item.hypothesis}<br>
+          ⚙️ Entropía: ${item.entropy}
+        </div>
+      `).join("");
+    } catch {
+      container.textContent = "No se pudo cargar el historial.";
+    }
   }
 </script>
 
