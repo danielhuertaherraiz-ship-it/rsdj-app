@@ -30,15 +30,6 @@ select { width:100%; padding:0.5rem; border-radius:8px; margin:0.5rem 0; }
 .conf-low { background:#dc2626; }
 .conf-mid { background:#f59e0b; }
 .conf-high { background:#16a34a; }
-
-/* Informe pericial */
-.report {
-  margin-top:1rem;
-  padding:1rem;
-  background:#eef2ff;
-  border-radius:10px;
-  font-size:0.95em;
-}
 </style>
 </head>
 
@@ -95,38 +86,60 @@ select { width:100%; padding:0.5rem; border-radius:8px; margin:0.5rem 0; }
 const API="https://rsdj-api.onrender.com";
 let last=null;
 
-/* INFORME PERICIAL */
-function buildPericialReport(d){
-  if(d.confidence===undefined) return "";
+/* ===============================
+   TRADUCCIÓN FUNCIONAL (OFICIAL)
+   =============================== */
+function functionalTranslation(d){
+  if(!d || d.confidence === undefined) return "";
 
-  let reliability =
-    d.confidence >= 0.85 ? "muy alta" :
-    d.confidence >= 0.70 ? "alta" :
-    d.confidence >= 0.50 ? "media" :
-    "baja";
+  if(d.hipotesis.includes("Lenguaje natural")){
+    return "Texto con estructura lingüística coherente, distribución léxica regular y variabilidad interna compatible con lenguaje natural.";
+  }
 
-  return `
-    <div class="report">
-      <b>Informe técnico</b><br><br>
-      El texto analizado presenta una <b>${d.hipotesis.toLowerCase()}</b>.
-      La entropía observada (${d.entropia}) y la distribución léxica
-      ${d.zipf && Math.abs(d.zipf) > 0.85 ? "son compatibles" : "no son claramente compatibles"}
-      con patrones lingüísticos estándar.
-      <br><br>
-      El nivel de confianza estructural obtenido es <b>${reliability}</b>
-      (score = ${d.confidence}), lo que permite considerar el resultado
-      como <b>${d.confidence >= 0.7 ? "fiable" : "orientativo"}</b>
-      en el contexto del preset seleccionado.
-    </div>
-  `;
+  if(d.hipotesis.includes("no lingüístico")){
+    return "Texto no lingüístico desde el punto de vista semántico, pero con estructura interna organizada y patrones funcionales consistentes.";
+  }
+
+  if(d.hipotesis.includes("repetitivo")){
+    return "Texto con alta repetición estructural, baja variabilidad léxica y función probablemente mecánica o procedimental.";
+  }
+
+  return "Texto con estructura mixta, combinando rasgos lingüísticos y no lingüísticos sin un patrón funcional dominante.";
 }
 
-/* MOSTRAR RESULTADO */
+/* =====================================
+   TRADUCCIÓN SEMÁNTICA (ORIENTATIVA ⚠️)
+   ===================================== */
+function semanticTranslation(d){
+  if(!d || d.confidence === undefined) return "";
+
+  if(d.confidence < 0.4){
+    return "La estructura del texto no permite una interpretación semántica fiable.";
+  }
+
+  if(d.hipotesis.includes("Lenguaje natural")){
+    return "La estructura es compatible con un texto descriptivo o expositivo, posiblemente informativo o narrativo.";
+  }
+
+  if(d.hipotesis.includes("no lingüístico")){
+    return "La organización del texto es compatible con un sistema técnico, simbólico o procedimental más que con un discurso semántico convencional.";
+  }
+
+  if(d.hipotesis.includes("repetitivo")){
+    return "La estructura sugiere un uso funcional repetitivo, como instrucciones, listados o secuencias automáticas.";
+  }
+
+  return "La estructura sugiere un contenido híbrido sin un campo semántico dominante claramente identificable.";
+}
+
+/* ===============================
+   MOSTRAR RESULTADO
+   =============================== */
 function show(d){
-  last=d;
+  last = d;
 
   let confidenceHTML="";
-  if(d.confidence!==undefined){
+  if(d.confidence !== undefined){
     const pct=Math.round(d.confidence*100);
     let cls=pct>=70?"conf-high":pct>=40?"conf-mid":"conf-low";
 
@@ -138,7 +151,7 @@ function show(d){
     `;
   }
 
-  result.innerHTML=`
+  document.getElementById("result").innerHTML=`
     <b>Hipótesis:</b> ${d.hipotesis}<br>
     Entropía: ${d.entropia}<br>
     Zipf: ${d.zipf}<br>
@@ -146,7 +159,13 @@ function show(d){
     Bigramas: ${d.bigram_conc}<br>
     Trigramas: ${d.trigram_conc}
     ${confidenceHTML}
-    ${buildPericialReport(d)}
+    <hr>
+    <b>Traducción funcional</b><br>
+    <i>${functionalTranslation(d)}</i>
+    <hr>
+    <b>Traducción semántica (orientativa)</b><br>
+    <i>${semanticTranslation(d)}</i>
+    <small><br>Nota: interpretación semántica orientativa basada en estructura, no traducción literal.</small>
   `;
 }
 
@@ -235,7 +254,9 @@ Hipótesis:${last.hipotesis}
 Confianza:${last.confidence}
 Entropía:${last.entropia}
 Zipf:${last.zipf}
-TTR:${last.ttr}`;
+TTR:${last.ttr}
+Traducción funcional:${functionalTranslation(last)}
+Traducción semántica:${semanticTranslation(last)}`;
   const b=new Blob([c],{type:"text/plain"});
   const a=document.createElement("a");
   a.href=URL.createObjectURL(b);
