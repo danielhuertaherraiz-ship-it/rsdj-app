@@ -1,246 +1,60 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <title>RSDJ — Análisis Lingüístico</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-  <style>
-    body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-      background: #f4f6f8;
-      margin: 0;
-      padding: 1rem;
-    }
-
-    h1 {
-      text-align: center;
-      margin-bottom: 0.2rem;
-    }
-
-    .subtitle {
-      text-align: center;
-      color: #666;
-      margin-bottom: 1.5rem;
-      font-size: 0.95em;
-    }
-
-    .card {
-      background: white;
-      border-radius: 12px;
-      padding: 1rem;
-      margin-bottom: 1rem;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
-    }
-
-    textarea {
-      width: 100%;
-      min-height: 100px;
-      padding: 0.6rem;
-      border-radius: 8px;
-      border: 1px solid #ccc;
-      resize: vertical;
-      font-size: 1em;
-    }
-
-    button {
-      width: 100%;
-      padding: 0.7rem;
-      font-size: 1em;
-      margin-top: 0.5rem;
-      border-radius: 10px;
-      border: none;
-      background: #2563eb;
-      color: white;
-      cursor: pointer;
-    }
-
-    button.secondary {
-      background: #475569;
-    }
-
-    button:disabled {
-      background: #9ca3af;
-      cursor: not-allowed;
-    }
-
-    .status {
-      margin-top: 0.4rem;
-      font-size: 0.9em;
-      color: #555;
-      min-height: 1.2em;
-    }
-
-    .result-box {
-      background: #f5f7fa;
-      border-radius: 10px;
-      padding: 1rem;
-      margin-top: 1rem;
-      font-size: 0.95em;
-    }
-
-    .hint {
-      margin-top: 0.4rem;
-      font-size: 0.85em;
-      color: #666;
-    }
-
-    .history-item {
-      margin-top: 0.6rem;
-      padding-top: 0.6rem;
-      border-top: 1px solid #e5e7eb;
-      font-size: 0.9em;
-      cursor: pointer;
-    }
-
-    .history-item:hover {
-      background: #f1f5f9;
-    }
-
-    @media print {
-      button, textarea, input {
-        display: none;
-      }
-      body {
-        background: white;
-      }
-    }
-  </style>
+<meta charset="UTF-8">
+<title>RSDJ — Investigación lingüística</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+body { font-family: system-ui; background:#f4f6f8; padding:1rem; }
+.card { background:white; padding:1rem; border-radius:12px; margin-bottom:1rem; }
+button { width:100%; padding:0.7rem; border-radius:10px; border:none; background:#2563eb; color:white; }
+.result { background:#f5f7fa; padding:1rem; border-radius:10px; }
+.hint { font-size:0.85em; color:#555; margin-top:0.4rem; }
+</style>
 </head>
 
 <body>
 
-<h1>RSDJ</h1>
-<div class="subtitle">
-  Análisis lingüístico automático · Texto y OCR
-</div>
+<h2>RSDJ — Análisis lingüístico</h2>
 
-<!-- TEXTO -->
 <div class="card">
-  <strong>Analizar texto</strong>
-  <textarea id="textInput" placeholder="Escribe o pega un texto aquí..."></textarea>
-  <button id="textButton" onclick="analyzeText()">Analizar texto</button>
-  <div id="textStatus" class="status"></div>
+<textarea id="textInput" placeholder="Introduce un texto..."></textarea>
+<button onclick="analyze()">Analizar</button>
 </div>
 
-<!-- RESULTADO -->
-<div class="card" id="analysisCard">
-  <div id="result" class="result-box">
-    <em>Selecciona un análisis o realiza uno nuevo.</em>
-  </div>
-
-  <button class="secondary" onclick="exportText()">📄 Exportar como texto</button>
-  <button class="secondary" onclick="exportPDF()">🖨️ Exportar como PDF</button>
-</div>
-
-<!-- HISTORIAL -->
-<div class="card">
-  <strong>Historial reciente</strong>
-  <button onclick="loadHistory()">Actualizar historial</button>
-  <div id="historyList" class="hint"></div>
-</div>
+<div class="card result" id="result">Esperando análisis…</div>
 
 <script>
-  const API = "https://rsdj-api.onrender.com";
-  let lastAnalysis = null;
+const API = "https://rsdj-api.onrender.com";
 
-  function showResult(data) {
-    lastAnalysis = data;
+function analyze() {
+  fetch(API + "/analyze", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({text:document.getElementById("textInput").value})
+  })
+  .then(r=>r.json())
+  .then(d=>{
     document.getElementById("result").innerHTML = `
-      <strong>Resultado del análisis</strong><br><br>
-      🔍 <strong>Hipótesis:</strong> ${data.hipotesis}<br>
-      📏 <strong>Longitud media:</strong> ${data.longitud_media}<br>
-      🔁 <strong>Repetición:</strong> ${data.repeticion}<br>
-      ⚙️ <strong>Entropía:</strong> ${data.entropia}
+      <b>Hipótesis:</b> ${d.hipotesis}<br>
+      <b>Entropía:</b> ${d.entropia}<br>
+      <b>Zipf:</b> ${d.zipf ?? "insuficiente"}<br>
+      <b>TTR:</b> ${d.ttr}<br>
       <div class="hint">
-        Interpretación automática basada en estructura y complejidad.
+        ${
+          d.zipf && d.zipf < -0.9
+          ? "Cumple la Ley de Zipf → patrón lingüístico natural."
+          : "Se desvía de Zipf → posible texto artificial."
+        }<br>
+        ${
+          d.ttr > 0.4
+          ? "Alta diversidad léxica."
+          : "Diversidad léxica baja."
+        }
       </div>
     `;
-  }
-
-  async function analyzeText() {
-    const text = document.getElementById("textInput").value.trim();
-    const status = document.getElementById("textStatus");
-    const button = document.getElementById("textButton");
-
-    if (!text) return alert("Introduce un texto.");
-
-    button.disabled = true;
-    status.textContent = "⏳ Analizando…";
-
-    try {
-      const res = await fetch(API + "/analyze", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ text })
-      });
-      const data = await res.json();
-      showResult(data);
-      status.textContent = "✅ Análisis completado";
-      loadHistory();
-    } catch {
-      status.textContent = "❌ Error al contactar con el servidor.";
-    }
-
-    button.disabled = false;
-  }
-
-  async function loadHistory() {
-    const container = document.getElementById("historyList");
-    container.textContent = "Cargando historial…";
-
-    try {
-      const res = await fetch(API + "/history");
-      const data = await res.json();
-
-      container.innerHTML = data.map(item => `
-        <div class="history-item" onclick="loadAnalysis(${item.id})">
-          🕒 ${new Date(item.created_at).toLocaleString()}<br>
-          🔍 ${item.hypothesis}<br>
-          ⚙️ Entropía: ${item.entropy}
-        </div>
-      `).join("");
-    } catch {
-      container.textContent = "No se pudo cargar el historial.";
-    }
-  }
-
-  async function loadAnalysis(id) {
-    document.getElementById("result").innerHTML = "⏳ Cargando análisis…";
-
-    const res = await fetch(API + "/analysis/" + id);
-    const data = await res.json();
-    showResult(data);
-  }
-
-  function exportText() {
-    if (!lastAnalysis) return alert("No hay análisis para exportar.");
-
-    const content =
-`RSDJ — Análisis lingüístico
-
-Hipótesis: ${lastAnalysis.hipotesis}
-Longitud media: ${lastAnalysis.longitud_media}
-Repetición: ${lastAnalysis.repeticion}
-Entropía: ${lastAnalysis.entropia}
-`;
-
-    const blob = new Blob([content], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "analisis_rsdj.txt";
-    a.click();
-
-    URL.revokeObjectURL(url);
-  }
-
-  function exportPDF() {
-    window.print();
-  }
-
-  loadHistory();
+  });
+}
 </script>
 
 </body>
