@@ -2,143 +2,110 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>RSDJ — Comparación lingüística</title>
+<title>RSDJ — Análisis e Investigación Lingüística</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <style>
-body {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  background:#f4f6f8;
-  padding:1rem;
-}
-h2 { text-align:center; }
-.card {
-  background:white;
-  padding:1rem;
-  border-radius:12px;
-  margin-bottom:1rem;
-}
-textarea {
-  width:100%;
-  min-height:90px;
-  margin-bottom:0.5rem;
-}
-button {
-  width:100%;
-  padding:0.7rem;
-  border-radius:10px;
-  border:none;
-  background:#2563eb;
-  color:white;
-}
-.result {
-  background:#f5f7fa;
-  padding:1rem;
-  border-radius:10px;
-}
-.hint {
-  font-size:0.9em;
-  color:#555;
-  margin-top:0.5rem;
-}
-.metric {
-  margin-top:0.4rem;
-}
+body { font-family: system-ui; background:#f4f6f8; padding:1rem; }
+.card { background:white; padding:1rem; border-radius:12px; margin-bottom:1rem; }
+textarea { width:100%; min-height:90px; }
+button { width:100%; padding:0.7rem; border-radius:10px; background:#2563eb; color:white; border:none; margin-top:0.5rem; }
+.result { background:#f5f7fa; padding:1rem; border-radius:10px; }
+.history { font-size:0.9em; margin-top:0.5rem; cursor:pointer; }
+hr { margin:1rem 0; }
 </style>
 </head>
 
 <body>
 
-<h2>RSDJ — Comparación entre textos</h2>
+<h2>RSDJ</h2>
 
 <div class="card">
-  <strong>Texto A</strong>
-  <textarea id="textA" placeholder="Pega aquí el primer texto"></textarea>
+<textarea id="textInput" placeholder="Introduce un texto"></textarea>
+<button onclick="analyze()">Analizar texto</button>
+</div>
+
+<div class="card result" id="result">Esperando análisis…</div>
+
+<div class="card">
+<button onclick="exportText()">Exportar análisis (TXT)</button>
+<button onclick="window.print()">Exportar análisis (PDF)</button>
 </div>
 
 <div class="card">
-  <strong>Texto B</strong>
-  <textarea id="textB" placeholder="Pega aquí el segundo texto"></textarea>
+<strong>Historial</strong>
+<div id="history"></div>
 </div>
 
 <div class="card">
-  <button onclick="compareTexts()">Comparar textos</button>
-</div>
-
-<div class="card result" id="result">
-  <em>Introduce dos textos y pulsa “Comparar”.</em>
+<strong>Comparación entre textos</strong>
+<textarea id="textA" placeholder="Texto A"></textarea>
+<textarea id="textB" placeholder="Texto B"></textarea>
+<button onclick="compare()">Comparar</button>
+<div id="comparisonResult"></div>
 </div>
 
 <script>
-const API = "https://rsdj-api.onrender.com";
+const API="https://rsdj-api.onrender.com";
+let last=null;
 
-async function analyze(text) {
-  const res = await fetch(API + "/analyze", {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({text})
-  });
-  return res.json();
+function show(d){
+ last=d;
+ document.getElementById("result").innerHTML=`
+<b>Hipótesis:</b> ${d.hipotesis}<br>
+Entropía: ${d.entropia}<br>
+Zipf: ${d.zipf}<br>
+TTR: ${d.ttr}<br>
+Bigramas: ${d.bigram_conc}<br>
+Trigramas: ${d.trigram_conc}`;
 }
 
-function distance(a, b) {
-  const keys = ["entropia", "zipf", "ttr", "bigram_conc", "trigram_conc"];
-  let sum = 0;
-
-  keys.forEach(k => {
-    if (a[k] !== null && b[k] !== null) {
-      sum += Math.pow(a[k] - b[k], 2);
-    }
-  });
-
-  return Math.sqrt(sum).toFixed(3);
+async function analyze(){
+ const t=document.getElementById("textInput").value;
+ const r=await fetch(API+"/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:t})});
+ const d=await r.json();
+ show(d);
+ loadHistory();
 }
 
-async function compareTexts() {
-  const a = document.getElementById("textA").value.trim();
-  const b = document.getElementById("textB").value.trim();
-  const out = document.getElementById("result");
-
-  if (!a || !b) {
-    alert("Introduce ambos textos.");
-    return;
-  }
-
-  out.innerHTML = "⏳ Analizando textos…";
-
-  try {
-    const A = await analyze(a);
-    const B = await analyze(b);
-    const d = distance(A, B);
-
-    let interpretation = "Textos estructuralmente distintos.";
-    if (d < 0.4) interpretation = "Textos muy similares estructuralmente.";
-    else if (d < 0.8) interpretation = "Textos moderadamente similares.";
-
-    out.innerHTML = `
-      <strong>Resultado de la comparación</strong><br><br>
-
-      <div class="metric"><b>Distancia estructural:</b> ${d}</div>
-      <div class="hint">${interpretation}</div>
-
-      <hr>
-
-      <div class="metric"><b>Texto A:</b> ${A.hipotesis}</div>
-      <div class="metric">Entropía: ${A.entropia}</div>
-      <div class="metric">Zipf: ${A.zipf}</div>
-      <div class="metric">TTR: ${A.ttr}</div>
-
-      <hr>
-
-      <div class="metric"><b>Texto B:</b> ${B.hipotesis}</div>
-      <div class="metric">Entropía: ${B.entropia}</div>
-      <div class="metric">Zipf: ${B.zipf}</div>
-      <div class="metric">TTR: ${B.ttr}</div>
-    `;
-  } catch {
-    out.innerHTML = "❌ Error al comparar textos.";
-  }
+async function loadHistory(){
+ const r=await fetch(API+"/history");
+ const h=await r.json();
+ document.getElementById("history").innerHTML=h.map(x=>`
+<div class="history" onclick="loadAnalysis(${x.id})">
+${x.created_at} — ${x.hypothesis}
+</div>`).join("");
 }
+
+async function loadAnalysis(id){
+ const r=await fetch(API+"/analysis/"+id);
+ const d=await r.json();
+ show(d);
+}
+
+async function compare(){
+ const a=await analyzeText(document.getElementById("textA").value);
+ const b=await analyzeText(document.getElementById("textB").value);
+ const dist=Math.sqrt(
+ (a.entropia-b.entropia)**2+
+ (a.zipf-b.zipf)**2+
+ (a.ttr-b.ttr)**2
+ ).toFixed(3);
+ document.getElementById("comparisonResult").innerHTML=`Distancia estructural: ${dist}`;
+}
+
+async function analyzeText(t){
+ const r=await fetch(API+"/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:t})});
+ return r.json();
+}
+
+function exportText(){
+ if(!last)return;
+ const c=`RSDJ\nHipótesis:${last.hipotesis}\nEntropía:${last.entropia}\nZipf:${last.zipf}\nTTR:${last.ttr}`;
+ const blob=new Blob([c],{type:"text/plain"});
+ const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="rsdj.txt";a.click();
+}
+
+loadHistory();
 </script>
 
 </body>
