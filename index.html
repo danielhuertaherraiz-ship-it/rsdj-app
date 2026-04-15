@@ -2,183 +2,151 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>RSDJ</title>
-
+  <title>RSDJ – Análisis Lingüístico</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
-    * {
-      box-sizing: border-box;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-
     body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
       margin: 0;
-      background: #0f1120;
-      color: #ffffff;
-      padding: 20px;
+      padding: 1rem;
+      background: #f4f4f4;
     }
-
-    h2 {
-      text-align: center;
-      margin-bottom: 20px;
+    h1, h2 {
+      margin-top: 0.5rem;
     }
-
-    textarea, input {
+    textarea, input[type="file"] {
       width: 100%;
-      padding: 14px;
-      margin-top: 10px;
-      border-radius: 12px;
-      border: none;
-      font-size: 15px;
-      background: #1d1b2f;
-      color: #ffffff;
+      margin: 0.5rem 0;
     }
-
     button {
-      width: 100%;
-      padding: 14px;
-      margin-top: 12px;
-      border-radius: 14px;
+      padding: 0.6rem 1rem;
+      margin: 0.5rem 0.3rem 0.5rem 0;
       border: none;
-      font-size: 16px;
-      font-weight: 600;
+      border-radius: 6px;
+      background: #1f6feb;
+      color: white;
       cursor: pointer;
-      background: linear-gradient(90deg, #ff8a00, #ffb347);
-      color: #000;
     }
-
-    button:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
+    button.secondary {
+      background: #555;
     }
-
-    pre {
-      background: #1d1b2f;
-      padding: 14px;
-      margin-top: 14px;
-      border-radius: 14px;
-      white-space: pre-wrap;
-      font-size: 14px;
+    .card {
+      background: white;
+      padding: 1rem;
+      border-radius: 8px;
+      margin: 0.8rem 0;
     }
-
-    .status {
-      margin-top: 10px;
-      font-size: 14px;
-      opacity: 0.85;
+    .muted {
+      color: #666;
+      font-size: 0.9em;
+    }
+    ul {
+      padding-left: 1.2rem;
     }
   </style>
 </head>
-
 <body>
 
-  <h2>RSDJ — Plataforma Lingüística</h2>
+<h1>RSDJ</h1>
+<p class="muted">Análisis lingüístico + OCR</p>
 
-  <!-- TEXTO -->
-  <textarea id="text" placeholder="Introduce texto para analizar…"></textarea>
-  <button id="btnText" onclick="analyzeText()">Analizar texto</button>
+<div class="card">
+  <h2>Analizar texto</h2>
+  <textarea id="textInput" rows="4" placeholder="Escribe o pega un texto aquí..."></textarea>
+  <button onclick="analyzeText()">Analizar</button>
+</div>
 
-  <!-- OCR -->
-  <input type="file" id="image" accept="image/*" />
-  <button id="btnImage" onclick="analyzeImage()">Analizar imagen (OCR)</button>
+<div class="card">
+  <h2>Analizar imagen (OCR)</h2>
+  <input type="file" id="imageInput" accept="image/*">
+  <button onclick="analyzeImage()">Analizar imagen</button>
+</div>
 
-  <div class="status" id="status"></div>
-  <pre id="result"></pre>
+<div class="card">
+  <h2>Resultado</h2>
+  <pre id="result">Esperando análisis…</pre>
+</div>
 
-  <script>
-    /******************************************************
-     * CONFIGURACIÓN
-     ******************************************************/
-    const API = "https://rsdj-backend.onrender.com";
+<div class="card">
+  <h2>Historial reciente</h2>
+  <button class="secondary" onclick="loadHistory()">Actualizar historial</button>
+  <ul id="history"></ul>
+</div>
 
-    const resultEl = document.getElementById("result");
-    const statusEl = document.getElementById("status");
-    const btnText = document.getElementById("btnText");
-    const btnImage = document.getElementById("btnImage");
+<script>
+const API = "https://rsdj-backend.onrender.com";
 
-    function setLoading(message) {
-      statusEl.textContent = message;
-      resultEl.textContent = "";
-      btnText.disabled = true;
-      btnImage.disabled = true;
-    }
+function showResult(data) {
+  document.getElementById("result").textContent =
+    JSON.stringify(data, null, 2);
+  loadHistory();
+}
 
-    function clearLoading() {
-      btnText.disabled = false;
-      btnImage.disabled = false;
-    }
+async function analyzeText() {
+  const text = document.getElementById("textInput").value;
+  if (!text.trim()) {
+    alert("Introduce un texto");
+    return;
+  }
 
-    /******************************************************
-     * ANALIZAR TEXTO
-     ******************************************************/
-    async function analyzeText() {
-      const text = document.getElementById("text").value.trim();
-      if (!text) {
-        alert("Introduce algún texto.");
-        return;
-      }
+  const res = await fetch(`${API}/analyze`, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({text})
+  });
 
-      setLoading("⏳ Analizando texto… (puede tardar la primera vez)");
+  const data = await res.json();
+  showResult(data);
+}
 
-      try {
-        const response = await fetch(API + "/analyze", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: text })
-        });
+async function analyzeImage() {
+  const file = document.getElementById("imageInput").files[0];
+  if (!file) {
+    alert("Selecciona una imagen");
+    return;
+  }
 
-        if (!response.ok) {
-          throw new Error("Error HTTP " + response.status);
-        }
+  const formData = new FormData();
+  formData.append("file", file);
 
-        const data = await response.json();
-        resultEl.textContent = JSON.stringify(data, null, 2);
-        statusEl.textContent = "✅ Análisis completado correctamente.";
+  const res = await fetch(`${API}/ocr`, {
+    method: "POST",
+    body: formData
+  });
 
-      } catch (err) {
-        resultEl.textContent = "❌ ERROR:\n" + err.message;
-        statusEl.textContent = "No se pudo conectar con el backend.";
-      } finally {
-        clearLoading();
-      }
-    }
+  const data = await res.json();
+  showResult(data);
+}
 
-    /******************************************************
-     * ANALIZAR IMAGEN (OCR)
-     ******************************************************/
-    async function analyzeImage() {
-      const file = document.getElementById("image").files[0];
-      if (!file) {
-        alert("Selecciona una imagen primero.");
-        return;
-      }
+async function loadHistory() {
+  const res = await fetch(`${API}/history`);
+  const data = await res.json();
 
-      setLoading("📸 Procesando imagen y OCR… (puede tardar)");
+  const list = document.getElementById("history");
+  list.innerHTML = "";
 
-      const formData = new FormData();
-      formData.append("file", file);
+  if (data.length === 0) {
+    list.innerHTML = "<li class='muted'>No hay análisis aún</li>";
+    return;
+  }
 
-      try {
-        const response = await fetch(API + "/ocr", {
-          method: "POST",
-          body: formData
-        });
+  data.forEach(item => {
+    const li = document.createElement("li");
+    li.innerHTML = `
+      <strong>${item.hypothesis}</strong><br>
+      <span class="muted">
+        ${item.source.toUpperCase()} ·
+        entropía ${item.entropy} ·
+        ${new Date(item.created_at).toLocaleString()}
+      </span>
+    `;
+    list.appendChild(li);
+  });
+}
 
-        if (!response.ok) {
-          throw new Error("Error HTTP " + response.status);
-        }
-
-        const data = await response.json();
-        resultEl.textContent = JSON.stringify(data, null, 2);
-        statusEl.textContent = "✅ OCR y análisis completados.";
-
-      } catch (err) {
-        resultEl.textContent = "❌ ERROR:\n" + err.message;
-        statusEl.textContent = "No se pudo procesar la imagen.";
-      } finally {
-        clearLoading();
-      }
-    }
-  </script>
+// cargar historial al abrir
+loadHistory();
+</script>
 
 </body>
 </html>
