@@ -243,7 +243,7 @@ def analyze_and_store(text: str, source: str):
     }
 
 # ============================================================
-# ENDPOINTS
+# ENDPOINTS EXISTENTES
 # ============================================================
 
 @app.post("/analyze")
@@ -259,3 +259,32 @@ async def ocr(file: UploadFile = File(...)):
     image = Image.open(io.BytesIO(await file.read()))
     text = pytesseract.image_to_string(image, lang="spa+eng")
     return analyze_and_store(text, source="ocr")
+
+# ============================================================
+# ====== AÑADIDO FINAL: TRADUCCIÓN LFV REAL ==================
+# ============================================================
+
+def lfv_traduccion_semantica(estado_final: str) -> str:
+    if estado_final == "cierre":
+        return "El proceso descrito se completa y la estructura queda fijada."
+    if estado_final == "densificacion":
+        return "La estructura se condensa mediante modificaciones sucesivas."
+    if estado_final == "expansion":
+        return "El sistema entra en una fase activa de desarrollo y despliegue."
+    if estado_final == "consolidacion":
+        return "La forma inicial se estabiliza y adquiere coherencia."
+    return "La forma inicia su configuración."
+
+@app.post("/lfv/translate")
+def lfv_translate(data: dict):
+    text = data.get("text", "")
+    engine = LFVEngine()
+    resultado = engine.analizar(text)
+
+    return {
+        "estado_final": resultado["estado_final"],
+        "segmentos": resultado["segmentos"],
+        "traduccion_semantica": lfv_traduccion_semantica(
+            resultado["estado_final"]
+        )
+    }
