@@ -30,10 +30,8 @@ hr{border:0;border-top:1px solid rgba(255,255,255,.15);margin:12px 0}
 
 <header>RSDJ</header>
 
-<!-- FEED -->
 <div id="home" class="view active"></div>
 
-<!-- ANALIZAR -->
 <div id="analyze" class="view">
   <div class="card">
     <textarea id="input" rows="4" placeholder="Introduce texto para analizar…"></textarea>
@@ -42,23 +40,19 @@ hr{border:0;border-top:1px solid rgba(255,255,255,.15);margin:12px 0}
 
   <div class="card">
     <input type="file" accept="image/*" capture="environment" onchange="runOCR(this)">
-    <small>📷 OCR desde imagen (flujo básico)</small>
+    <small>📷 OCR desde imagen</small>
   </div>
 </div>
 
-<!-- RESULTADO -->
 <div id="result" class="view">
   <div class="card" id="resultBox"></div>
 </div>
 
-<!-- PERFIL -->
 <div id="profile" class="view">
   <div class="card">
     <b>Perfil</b>
     <div class="metric">Análisis guardados: <span id="count">0</span></div>
-    <button onclick="clearData()" style="background:#c0392b;margin-top:10px">
-      Borrar todos los datos
-    </button>
+    <button onclick="clearData()" style="background:#c0392b">Borrar datos</button>
   </div>
 </div>
 
@@ -72,40 +66,19 @@ hr{border:0;border-top:1px solid rgba(255,255,255,.15);margin:12px 0}
 </div>
 
 <script>
-/* =========================
-   PERSISTENCIA
-========================= */
+/* ========== CONFIGURACIÓN BACKEND ==========
+   👇👇👇 CAMBIA ESTO 👇👇👇
+*/
+const API = "http://localhost:8000";
+/* Cuando lo tengas online será:
+const API = "https://TU-BACKEND";
+*/
+
+/* ========== DATOS ========== */
 const STORAGE_KEY = "rsdj_posts_v1";
+let posts = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
 
-let posts = [];
-
-function loadPosts(){
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if(saved){
-    try {
-      posts = JSON.parse(saved);
-    } catch(e){
-      posts = [];
-    }
-  }
-}
-
-function savePosts(){
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(posts));
-}
-
-function clearData(){
-  if(!confirm("¿Seguro que quieres borrar todos los análisis?")) return;
-  localStorage.removeItem(STORAGE_KEY);
-  posts = [];
-  renderFeed();
-  document.getElementById("count").innerText = 0;
-  show("home");
-}
-
-/* =========================
-   NAVEGACIÓN
-========================= */
+/* ========== NAVEGACIÓN ========== */
 function show(view){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.getElementById(view).classList.add('active');
@@ -114,103 +87,91 @@ function show(view){
   if(view==="home") renderFeed();
 }
 
-/* =========================
-   ANÁLISIS
-========================= */
-function entropy(text){
-  const f={}; for(let c of text)f[c]=(f[c]||0)+1;
-  let e=0,n=text.length;
-  for(let c in f){let p=f[c]/n;e-=p*Math.log2(p)}
-  return e.toFixed(3);
-}
-
-function analyzeText(text){
-  const words=text.split(/\s+/);
-  const avg=(words.reduce((a,w)=>a+w.length,0)/words.length).toFixed(2);
-  const rep=(1-new Set(words).size/words.length).toFixed(2);
-  const ent=entropy(words.join(""));
-  const freq={}; words.forEach(w=>freq[w.toLowerCase()] = (freq[w.toLowerCase()]||0)+1);
-
-  const particles=Object.entries(freq)
-    .filter(([w,c])=>w.length<=3 && c>1)
-    .map(([w])=>w)
-    .slice(0,8);
-
-  let h="Estructura mixta";
-  if(avg<4&&rep<0.3)h="Lengua aislante probable";
-  else if(avg>7&&rep>0.4)h="Lengua aglutinante probable";
-  else if(ent>4.5)h="Texto cifrado / no lingüístico";
-
-  return {
-    id: Date.now(),
-    text,
-    h, avg, rep, ent, particles,
-    time: new Date().toLocaleString()
-  };
-}
-
-function runAnalysis(){
-  const text=document.getElementById('input').value.trim();
+/* ========== BACKEND TEXTO ========== */
+async function runAnalysis(){
+  const text = document.getElementById("input").value.trim();
   if(!text) return;
-  const post = analyzeText(text);
+
+  const res = await fetch(API + "/analyze", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({text})
+  });
+
+  const post = await res.json();
+  post.time = new Date().toLocaleString();
   posts.unshift(post);
-  savePosts();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(posts));
   renderResult(post);
+  renderFeed();
   document.getElementById("count").innerText = posts.length;
   show("result");
 }
 
-/* =========================
-   OCR (flujo básico)
-========================= */
-function runOCR(input){
-  alert("OCR automático llegará en el siguiente paso con backend.\nPor ahora iOS reconoce texto al copiar.\nCaptura, copia y pega arriba.");
+/* ========== BACKEND OCR ========== */
+async function runOCR(input){
+  const file = input.files[0];
+  if(!file) return;
+
+  const form = new FormData();
+  form.append("file", file);
+
+  const res = await fetch(API + "/ocr", {
+    method: "POST",
+    body: form
+  });
+
+  const post = await res.json();
+  post.time = new Date().toLocaleString();
+  posts.unshift(post);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(posts));
+  renderResult(post);
+  renderFeed();
+  document.getElementById("count").innerText = posts.length;
+  show("result");
 }
 
-/* =========================
-   RENDER
-========================= */
+/* ========== UI ========== */
 function renderResult(p){
-  document.getElementById('resultBox').innerHTML=`
-    <b>${p.h}</b>
-    <div class="metric">📏 Longitud media: ${p.avg}</div>
-    <div class="metric">🔁 Repetición: ${p.rep}</div>
-    <div class="metric">🧮 Entropía: ${p.ent}</div>
+  document.getElementById("resultBox").innerHTML = `
+    <b>${p.hipotesis}</b>
+    <div class="metric">📏 Longitud media: ${p.longitud_media}</div>
+    <div class="metric">🔁 Repetición: ${p.repeticion}</div>
+    <div class="metric">🧮 Entropía: ${p.entropia}</div>
     <hr>
     <b>Lenguaje funcional</b>
-    <div class="metric">${p.particles.join(", ")||"No claro"}</div>
+    <div class="metric">${p.particulas.join(", ") || "No claro"}</div>
     <hr>
     <small>${p.time}</small>
   `;
 }
 
 function renderFeed(){
-  const feed=document.getElementById('home');
-  feed.innerHTML='';
-  if(posts.length===0){
-    feed.innerHTML='<div class="card">No hay análisis todavía.</div>';
+  const feed = document.getElementById("home");
+  feed.innerHTML = "";
+  if(posts.length === 0){
+    feed.innerHTML = '<div class="card">No hay análisis todavía.</div>';
     return;
   }
   posts.forEach(p=>{
-    const card=document.createElement("div");
-    card.className="card";
-    card.innerHTML=`
-      <b>${p.h}</b>
-      <div class="metric">${p.text.slice(0,100)}...</div>
-      <small>${p.time}</small>
-    `;
-    card.onclick=()=>{renderResult(p);show('result')};
-    feed.appendChild(card);
+    const c = document.createElement("div");
+    c.className="card";
+    c.innerHTML = `<b>${p.hipotesis}</b><div class="metric">${p.texto || ""}</div>`;
+    c.onclick = ()=>{ renderResult(p); show("result"); };
+    feed.appendChild(c);
   });
 }
 
-/* =========================
-   INICIALIZACIÓN
-========================= */
-loadPosts();
-document.getElementById("count").innerText = posts.length;
+function clearData(){
+  localStorage.clear();
+  posts = [];
+  renderFeed();
+  document.getElementById("count").innerText = 0;
+  show("home");
+}
+
 renderFeed();
+document.getElementById("count").innerText = posts.length;
 </script>
 </body>
 </html>
-``
