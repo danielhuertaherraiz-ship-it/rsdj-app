@@ -85,12 +85,38 @@ def ngram_concentration(text: str, n: int, top_k: int = 5):
     return round(top / total, 3)
 
 # --------------------
-# CONFIDENCE SYSTEM ✅
+# CONFIDENCE SYSTEM
 # --------------------
 def clamp(x, a=0.0, b=1.0):
     return max(a, min(x, b))
 
-def confidence_score(ent, zipf, ttr, repetition, bigram_c, trigram_c):
+PRESETS = {
+    "general": {
+        "entropy": 0.25,
+        "zipf": 0.20,
+        "ttr": 0.20,
+        "repetition": 0.20,
+        "ngram": 0.15
+    },
+    "forense": {
+        "entropy": 0.30,
+        "zipf": 0.25,
+        "ttr": 0.15,
+        "repetition": 0.15,
+        "ngram": 0.15
+    },
+    "ia": {
+        "entropy": 0.20,
+        "zipf": 0.15,
+        "ttr": 0.30,
+        "repetition": 0.20,
+        "ngram": 0.15
+    }
+}
+
+def confidence_score(ent, zipf, ttr, repetition, bigram_c, trigram_c, preset="general"):
+    p = PRESETS.get(preset, PRESETS["general"])
+
     entropy_s = clamp((ent - 2.5) / (4.8 - 2.5))
     zipf_s = clamp((abs(zipf) - 0.6) / (1.0 - 0.6)) if zipf else 0.0
     ttr_s = clamp((ttr - 0.2) / (0.6 - 0.2))
@@ -98,11 +124,11 @@ def confidence_score(ent, zipf, ttr, repetition, bigram_c, trigram_c):
     ngram_s = clamp(1 - ((bigram_c + trigram_c) / 2))
 
     score = (
-        0.25 * entropy_s +
-        0.20 * zipf_s +
-        0.20 * ttr_s +
-        0.20 * repetition_s +
-        0.15 * ngram_s
+        p["entropy"] * entropy_s +
+        p["zipf"] * zipf_s +
+        p["ttr"] * ttr_s +
+        p["repetition"] * repetition_s +
+        p["ngram"] * ngram_s
     )
 
     if zipf is None:
@@ -153,7 +179,7 @@ def confidence_explanation(ent, zipf, ttr, repetition, bigram_c, trigram_c):
 # --------------------
 # ANALYSIS CORE
 # --------------------
-def analyze_and_store(text: str, source: str):
+def analyze_and_store(text: str, source: str, preset="general"):
     words = text.split()
 
     avg = round(sum(len(w) for w in words) / len(words), 2) if words else 0
@@ -172,7 +198,7 @@ def analyze_and_store(text: str, source: str):
     elif ttr < 0.25:
         hypothesis = "Texto repetitivo o simplificado"
 
-    conf = confidence_score(ent, zipf, ttr, rep, bigram_c, trigram_c)
+    conf = confidence_score(ent, zipf, ttr, rep, bigram_c, trigram_c, preset)
 
     db = SessionLocal()
     entry = Analysis(
@@ -196,6 +222,7 @@ def analyze_and_store(text: str, source: str):
         "id": entry.id,
         "texto": text,
         "hipotesis": hypothesis,
+        "preset": preset,
         "confidence": conf,
         "confidence_label": confidence_label(conf),
         "confidence_explanation": confidence_explanation(
@@ -215,7 +242,8 @@ def analyze_and_store(text: str, source: str):
 # --------------------
 @app.post("/analyze")
 def analyze(data: dict):
-    return analyze_and_store(data["text"], source="text")
+    preset = data.get("preset", "general")
+    return analyze_and_store(data["text"], source="text", preset=preset)
 
 @app.post("/ocr")
 async def ocr(file: UploadFile = File(...)):
