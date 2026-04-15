@@ -7,13 +7,17 @@ from datetime import datetime
 from typing import Optional
 import math
 import io
+
 from PIL import Image
 import pytesseract
 
 # --------------------
 # APP
 # --------------------
-app = FastAPI(title="RSDJ Backend")
+app = FastAPI(
+    title="RSDJ Backend",
+    version="1.0.0",
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -28,26 +32,30 @@ app.add_middleware(
 DATABASE_URL = "sqlite:///./rsdj.db"
 
 engine = create_engine(
-    DATABASE_URL, connect_args={"check_same_thread": False}
+    DATABASE_URL,
+    connect_args={"check_same_thread": False},
 )
 
-SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 Base = declarative_base()
+
 
 class Analysis(Base):
     __tablename__ = "analyses"
 
     id = Column(Integer, primary_key=True, index=True)
-    source = Column(String)
-    text = Column(String)
-    hypothesis = Column(String)
-    avg_length = Column(Float)
-    repetition = Column(Float)
-    entropy = Column(Float)
-    particles = Column(String)
+    source = Column(String, nullable=False)  # "text" | "ocr"
+    text = Column(String, nullable=False)
+    hypothesis = Column(String, nullable=False)
+    avg_length = Column(Float, nullable=False)
+    repetition = Column(Float, nullable=False)
+    entropy = Column(Float, nullable=False)
+    particles = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+
 Base.metadata.create_all(bind=engine)
+
 
 def get_db():
     db = SessionLocal()
@@ -56,28 +64,31 @@ def get_db():
     finally:
         db.close()
 
+
 # --------------------
 # ANALYSIS LOGIC
 # --------------------
-def entropy(text: str) -> float:
+def calculate_entropy(text: str) -> float:
     if not text:
         return 0.0
     freq = Counter(text)
     total = len(text)
     return round(
-        -sum((c / total) * math.log2(c / total) for c in freq.values()), 3
+        -sum((c / total) * math.log2(c / total) for c in freq.values()),
+        3,
     )
+
 
 def analyze_text(
     text: str,
-    source: str = "text",
-    db: Optional[Session] = None
+    source: str,
+    db: Optional[Session] = None,
 ):
     words = text.split()
 
-    avg = round(sum(len(w) for w in words) / len(words), 2) if words else 0
-    rep = round(1 - len(set(words)) / len(words), 2) if words else 0
-    ent = entropy("".join(words))
+    avg = round(sum(len(w) for w in words) / len(words), 2) if words else 0.0
+    rep = round(1 - len(set(words)) / len(words), 2) if words else 0.0
+    ent = calculate_entropy("".join(words))
 
     freq = Counter(w.lower() for w in words)
     particles = [w for w, c in freq.items() if len(w) <= 3 and c > 1][:8]
@@ -96,7 +107,7 @@ def analyze_text(
         "longitud_media": avg,
         "repeticion": rep,
         "entropia": ent,
-        "particulas": particles
+        "particulas": particles,
     }
 
     if db is not None:
@@ -107,25 +118,30 @@ def analyze_text(
             avg_length=avg,
             repetition=rep,
             entropy=ent,
-            particles=",".join(particles)
+            particles=",".join(particles),
         )
         db.add(entry)
         db.commit()
 
     return result
 
+
 # --------------------
 # ENDPOINTS
 # --------------------
 @app.post("/analyze")
-def analyze(data: dict, db: Session = Depends(get_db)):
-    return analyze_text(data.get("text", ""), source="text", db=db)
+def analyze(payload: dict, db: Session = Depends(get_db)):
+    text = payload.get("text", "")
+    return analyze_text(text=text, source="text", db=db)
+
 
 @app.post("/ocr")
 async def ocr(file: UploadFile = File(...), db: Session = Depends(get_db)):
-    image = Image.open(io.BytesIO(await file.read()))
+    image_bytes = await file.read()
+    image = Image.open(io.BytesIO(image_bytes))
     text = pytesseract.image_to_string(image, lang="spa+eng")
-    return analyze_text(text, source="ocr", db=db)
+    return analyze_text(text=text, source="ocr", db=db)
+
 
 @app.get("/history")
 def history(db: Session = Depends(get_db)):
@@ -142,7 +158,8 @@ def history(db: Session = Depends(get_db)):
             "source": r.source,
             "hypothesis": r.hypothesis,
             "entropy": r.entropy,
-            "created_at": r.created_at.isoformat()
+            "created_at": r.created_at.isoformat(),
         }
         for r in records
     ]
+``
