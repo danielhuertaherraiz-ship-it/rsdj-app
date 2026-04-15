@@ -15,7 +15,7 @@
 
     h1 {
       margin-top: 0;
-      font-weight: 700;
+      font-size: 28px;
     }
 
     textarea {
@@ -23,15 +23,15 @@
       min-height: 120px;
       padding: 12px;
       font-size: 15px;
-      box-sizing: border-box;
-      border-radius: 8px;
+      border-radius: 10px;
       border: 1px solid #ddd;
+      box-sizing: border-box;
     }
 
     .buttons {
       margin-top: 12px;
       display: flex;
-      gap: 8px;
+      gap: 10px;
       flex-wrap: wrap;
     }
 
@@ -52,7 +52,7 @@
       margin-top: 14px;
       padding: 12px;
       border: 1px solid #ddd;
-      border-radius: 8px;
+      border-radius: 10px;
       font-size: 14px;
       background: #fafafa;
       min-height: 20px;
@@ -71,7 +71,7 @@
     <button id="lfvBtn">🧬 Analizar con LFV</button>
   </div>
 
-  <!-- MISMO CONTENEDOR DE RESULTADOS PARA TODO -->
+  <!-- MISMO CONTENEDOR PARA RSDJ Y LFV -->
   <div id="result"></div>
 
   <script>
@@ -80,9 +80,9 @@
     const textInput = document.getElementById("textInput");
     const resultBox = document.getElementById("result");
 
-    /* =====================
-       RSDJ ORIGINAL
-       ===================== */
+    /* =========================
+       RSDJ — /analyze
+       ========================= */
     document.getElementById("analyzeBtn").addEventListener("click", async () => {
       const text = textInput.value.trim();
       if (!text) {
@@ -105,16 +105,20 @@
           <b>Hipótesis:</b> ${data.hipotesis}<br>
           <b>Entropía:</b> ${data.entropia}<br>
           <b>TTR:</b> ${data.ttr}<br>
-          <b>Zipf:</b> ${data.zipf}
+          <b>Zipf:</b> ${data.zipf}<br>
+          <b>Repetición:</b> ${data.repeticion}<br>
+          <b>Bigramas:</b> ${data.bigram_conc}<br>
+          <b>Trigramas:</b> ${data.trigram_conc}
         `;
       } catch (e) {
         resultBox.innerHTML = "Error en el análisis";
       }
     });
 
-    /* =====================
-       LFV (MISMO RESULT BOX)
-       ===================== */
+    /* =========================
+       LFV — /lfv/analyze
+       (usa el MISMO resultBox)
+       ========================= */
     document.getElementById("lfvBtn").addEventListener("click", async () => {
       const text = textInput.value.trim();
       if (!text) {
