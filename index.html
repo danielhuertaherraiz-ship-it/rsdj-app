@@ -2,150 +2,200 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>RSDJ – Análisis Lingüístico</title>
+  <title>RSDJ — Análisis Lingüístico</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
   <style>
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #f4f6f8;
       margin: 0;
       padding: 1rem;
-      background: #f4f4f4;
     }
-    h1, h2 {
+
+    h1 {
+      text-align: center;
+      margin-bottom: 0.2rem;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #666;
+      margin-bottom: 1.5rem;
+      font-size: 0.95em;
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 100px;
+      padding: 0.6rem;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      resize: vertical;
+      font-size: 1em;
+    }
+
+    input[type="file"] {
       margin-top: 0.5rem;
     }
-    textarea, input[type="file"] {
-      width: 100%;
-      margin: 0.5rem 0;
-    }
+
     button {
-      padding: 0.6rem 1rem;
-      margin: 0.5rem 0.3rem 0.5rem 0;
+      width: 100%;
+      padding: 0.7rem;
+      font-size: 1em;
+      margin-top: 0.7rem;
+      border-radius: 10px;
       border: none;
-      border-radius: 6px;
-      background: #1f6feb;
+      background: #2563eb;
       color: white;
       cursor: pointer;
     }
-    button.secondary {
-      background: #555;
+
+    button:disabled {
+      background: #999;
+      cursor: not-allowed;
     }
-    .card {
-      background: white;
-      padding: 1rem;
-      border-radius: 8px;
-      margin: 0.8rem 0;
-    }
-    .muted {
-      color: #666;
+
+    .status {
+      margin-top: 0.5rem;
       font-size: 0.9em;
+      color: #555;
     }
-    ul {
-      padding-left: 1.2rem;
+
+    .result-box {
+      background: #f5f7fa;
+      border-radius: 10px;
+      padding: 1rem;
+      margin-top: 1rem;
+      font-size: 0.95em;
+    }
+
+    .result-box strong {
+      font-size: 1.1em;
+    }
+
+    .hint {
+      margin-top: 0.5rem;
+      font-size: 0.85em;
+      color: #666;
     }
   </style>
 </head>
+
 <body>
 
-<h1>RSDJ</h1>
-<p class="muted">Análisis lingüístico + OCR</p>
+  <h1>RSDJ</h1>
+  <div class="subtitle">
+    Análisis lingüístico automático · Texto y OCR
+  </div>
 
-<div class="card">
-  <h2>Analizar texto</h2>
-  <textarea id="textInput" rows="4" placeholder="Escribe o pega un texto aquí..."></textarea>
-  <button onclick="analyzeText()">Analizar</button>
-</div>
+  <!-- TEXTO -->
+  <div class="card">
+    <strong>Analizar texto</strong>
+    <textarea id="textInput" placeholder="Escribe o pega un texto aquí..."></textarea>
+    <button onclick="analyzeText()">Analizar texto</button>
+    <div id="textStatus" class="status"></div>
+  </div>
 
-<div class="card">
-  <h2>Analizar imagen (OCR)</h2>
-  <input type="file" id="imageInput" accept="image/*">
-  <button onclick="analyzeImage()">Analizar imagen</button>
-</div>
+  <!-- OCR -->
+  <div class="card">
+    <strong>Analizar imagen (OCR)</strong>
+    <input type="file" id="imageInput" accept="image/*">
+    <button onclick="analyzeImage()">Analizar imagen</button>
+    <div id="imageStatus" class="status"></div>
+  </div>
 
-<div class="card">
-  <h2>Resultado</h2>
-  <pre id="result">Esperando análisis…</pre>
-</div>
-
-<div class="card">
-  <h2>Historial reciente</h2>
-  <button class="secondary" onclick="loadHistory()">Actualizar historial</button>
-  <ul id="history"></ul>
-</div>
+  <!-- RESULTADO -->
+  <div class="card">
+    <div id="result" class="result-box">
+      <em>El resultado aparecerá aquí.</em>
+    </div>
+  </div>
 
 <script>
-const API = "https://rsdj-backend.onrender.com";
+  const API = "https://rsdj-api.onrender.com";
 
-function showResult(data) {
-  document.getElementById("result").textContent =
-    JSON.stringify(data, null, 2);
-  loadHistory();
-}
+  function showResult(data) {
+    const result = document.getElementById("result");
 
-async function analyzeText() {
-  const text = document.getElementById("textInput").value;
-  if (!text.trim()) {
-    alert("Introduce un texto");
-    return;
-  }
+    result.innerHTML = `
+      <strong>Resultado del análisis</strong><br><br>
 
-  const res = await fetch(`${API}/analyze`, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({text})
-  });
+      🔍 <strong>Hipótesis:</strong> ${data.hipotesis}<br>
+      📏 <strong>Longitud media de palabra:</strong> ${data.longitud_media}<br>
+      🔁 <strong>Repetición léxica:</strong> ${data.repeticion}<br>
+      ⚙️ <strong>Entropía:</strong> ${data.entropia}<br>
 
-  const data = await res.json();
-  showResult(data);
-}
-
-async function analyzeImage() {
-  const file = document.getElementById("imageInput").files[0];
-  if (!file) {
-    alert("Selecciona una imagen");
-    return;
-  }
-
-  const formData = new FormData();
-  formData.append("file", file);
-
-  const res = await fetch(`${API}/ocr`, {
-    method: "POST",
-    body: formData
-  });
-
-  const data = await res.json();
-  showResult(data);
-}
-
-async function loadHistory() {
-  const res = await fetch(`${API}/history`);
-  const data = await res.json();
-
-  const list = document.getElementById("history");
-  list.innerHTML = "";
-
-  if (data.length === 0) {
-    list.innerHTML = "<li class='muted'>No hay análisis aún</li>";
-    return;
-  }
-
-  data.forEach(item => {
-    const li = document.createElement("li");
-    li.innerHTML = `
-      <strong>${item.hypothesis}</strong><br>
-      <span class="muted">
-        ${item.source.toUpperCase()} ·
-        entropía ${item.entropy} ·
-        ${new Date(item.created_at).toLocaleString()}
-      </span>
+      <div class="hint">
+        Interpretación automática basada en patrones de longitud,
+        repetición y complejidad estructural del texto.
+      </div>
     `;
-    list.appendChild(li);
-  });
-}
+  }
 
-// cargar historial al abrir
-loadHistory();
+  async function analyzeText() {
+    const text = document.getElementById("textInput").value.trim();
+    const status = document.getElementById("textStatus");
+
+    if (!text) {
+      alert("Introduce un texto para analizar.");
+      return;
+    }
+
+    status.textContent = "Analizando texto…";
+
+    try {
+      const res = await fetch(API + "/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text })
+      });
+
+      const data = await res.json();
+      showResult(data);
+      status.textContent = "Análisis completado ✅";
+
+    } catch (err) {
+      status.textContent = "Error al analizar el texto.";
+    }
+  }
+
+  async function analyzeImage() {
+    const fileInput = document.getElementById("imageInput");
+    const status = document.getElementById("imageStatus");
+
+    if (!fileInput.files.length) {
+      alert("Selecciona una imagen.");
+      return;
+    }
+
+    status.textContent = "Procesando imagen…";
+
+    const formData = new FormData();
+    formData.append("file", fileInput.files[0]);
+
+    try {
+      const res = await fetch(API + "/ocr", {
+        method: "POST",
+        body: formData
+      });
+
+      const data = await res.json();
+      showResult(data);
+      status.textContent = "Análisis OCR completado ✅";
+
+    } catch (err) {
+      status.textContent = "Error al procesar la imagen.";
+    }
+  }
 </script>
 
 </body>
