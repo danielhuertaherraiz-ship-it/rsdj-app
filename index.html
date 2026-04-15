@@ -22,6 +22,12 @@ button {
 .history { font-size:0.9em; margin-top:0.5rem; cursor:pointer; }
 hr { margin:1rem 0; }
 input[type="file"] { margin-top:0.5rem; }
+select {
+  width:100%;
+  padding:0.5rem;
+  border-radius:8px;
+  margin-bottom:0.5rem;
+}
 
 /* Barra de confianza */
 .conf-bar {
@@ -45,6 +51,14 @@ input[type="file"] { margin-top:0.5rem; }
 <!-- TEXTO -->
 <div class="card">
   <textarea id="textInput" placeholder="Introduce un texto"></textarea>
+
+  <!-- PRESET -->
+  <select id="presetSelect">
+    <option value="general">Modo general</option>
+    <option value="forense">Modo forense</option>
+    <option value="ia">Modo detección IA</option>
+  </select>
+
   <button onclick="analyze()">Analizar texto</button>
   <button onclick="analyzeLFV()">🧬 Analizar con LFV</button>
 </div>
@@ -97,6 +111,7 @@ function show(d){
 
     confidenceHTML=`
       <hr>
+      <i>Preset: ${d.preset || "general"}</i><br>
       <b>Confianza estructural:</b> ${d.confidence} (${d.confidence_label})
       <div class="conf-bar">
         <div class="conf-fill ${cls}" style="width:${pct}%"></div>
@@ -120,10 +135,14 @@ function show(d){
 
 /* TEXTO */
 async function analyze(){
+  const preset=presetSelect.value;
   const r=await fetch(API+"/analyze",{
     method:"POST",
     headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({text:textInput.value})
+    body:JSON.stringify({
+      text:textInput.value,
+      preset:preset
+    })
   });
   show(await r.json());
   loadHistory();
@@ -201,6 +220,7 @@ async function analyzeText(t){
 function exportText(){
   if(!last)return;
   const c=`RSDJ
+Preset:${last.preset}
 Hipótesis:${last.hipotesis}
 Confianza:${last.confidence}
 Entropía:${last.entropia}
