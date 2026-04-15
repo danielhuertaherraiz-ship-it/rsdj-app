@@ -47,12 +47,16 @@
       width: 100%;
       padding: 0.7rem;
       font-size: 1em;
-      margin-top: 0.7rem;
+      margin-top: 0.5rem;
       border-radius: 10px;
       border: none;
       background: #2563eb;
       color: white;
       cursor: pointer;
+    }
+
+    button.secondary {
+      background: #475569;
     }
 
     button:disabled {
@@ -61,7 +65,7 @@
     }
 
     .status {
-      margin-top: 0.5rem;
+      margin-top: 0.4rem;
       font-size: 0.9em;
       color: #555;
       min-height: 1.2em;
@@ -92,6 +96,15 @@
     .history-item:hover {
       background: #f1f5f9;
     }
+
+    @media print {
+      button, textarea, input {
+        display: none;
+      }
+      body {
+        background: white;
+      }
+    }
   </style>
 </head>
 
@@ -111,10 +124,13 @@
 </div>
 
 <!-- RESULTADO -->
-<div class="card">
+<div class="card" id="analysisCard">
   <div id="result" class="result-box">
     <em>Selecciona un análisis o realiza uno nuevo.</em>
   </div>
+
+  <button class="secondary" onclick="exportText()">📄 Exportar como texto</button>
+  <button class="secondary" onclick="exportPDF()">🖨️ Exportar como PDF</button>
 </div>
 
 <!-- HISTORIAL -->
@@ -126,17 +142,10 @@
 
 <script>
   const API = "https://rsdj-api.onrender.com";
-
-  function setLoading(button, statusEl, msg) {
-    button.disabled = true;
-    statusEl.textContent = msg;
-  }
-
-  function setIdle(button) {
-    button.disabled = false;
-  }
+  let lastAnalysis = null;
 
   function showResult(data) {
+    lastAnalysis = data;
     document.getElementById("result").innerHTML = `
       <strong>Resultado del análisis</strong><br><br>
       🔍 <strong>Hipótesis:</strong> ${data.hipotesis}<br>
@@ -156,7 +165,8 @@
 
     if (!text) return alert("Introduce un texto.");
 
-    setLoading(button, status, "⏳ Analizando texto…");
+    button.disabled = true;
+    status.textContent = "⏳ Analizando…";
 
     try {
       const res = await fetch(API + "/analyze", {
@@ -172,7 +182,7 @@
       status.textContent = "❌ Error al contactar con el servidor.";
     }
 
-    setIdle(button);
+    button.disabled = false;
   }
 
   async function loadHistory() {
@@ -182,11 +192,6 @@
     try {
       const res = await fetch(API + "/history");
       const data = await res.json();
-
-      if (!data.length) {
-        container.textContent = "No hay análisis todavía.";
-        return;
-      }
 
       container.innerHTML = data.map(item => `
         <div class="history-item" onclick="loadAnalysis(${item.id})">
@@ -203,17 +208,38 @@
   async function loadAnalysis(id) {
     document.getElementById("result").innerHTML = "⏳ Cargando análisis…";
 
-    try {
-      const res = await fetch(API + "/analysis/" + id);
-      const data = await res.json();
-      showResult(data);
-    } catch {
-      document.getElementById("result").innerHTML =
-        "❌ No se pudo cargar el análisis.";
-    }
+    const res = await fetch(API + "/analysis/" + id);
+    const data = await res.json();
+    showResult(data);
   }
 
-  // Cargar historial al abrir
+  function exportText() {
+    if (!lastAnalysis) return alert("No hay análisis para exportar.");
+
+    const content =
+`RSDJ — Análisis lingüístico
+
+Hipótesis: ${lastAnalysis.hipotesis}
+Longitud media: ${lastAnalysis.longitud_media}
+Repetición: ${lastAnalysis.repeticion}
+Entropía: ${lastAnalysis.entropia}
+`;
+
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "analisis_rsdj.txt";
+    a.click();
+
+    URL.revokeObjectURL(url);
+  }
+
+  function exportPDF() {
+    window.print();
+  }
+
   loadHistory();
 </script>
 
