@@ -4,7 +4,9 @@ from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
 from collections import Counter
 from datetime import datetime
-import math, io
+from typing import Optional
+import math
+import io
 from PIL import Image
 import pytesseract
 
@@ -29,7 +31,7 @@ engine = create_engine(
     DATABASE_URL, connect_args={"check_same_thread": False}
 )
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 Base = declarative_base()
 
 class Analysis(Base):
@@ -55,18 +57,22 @@ def get_db():
         db.close()
 
 # --------------------
-# LOGIC
+# ANALYSIS LOGIC
 # --------------------
-def entropy(text: str):
+def entropy(text: str) -> float:
     if not text:
-        return 0
+        return 0.0
     freq = Counter(text)
     total = len(text)
     return round(
         -sum((c / total) * math.log2(c / total) for c in freq.values()), 3
     )
 
-def analyze_text(text: str, source="text", db: Session | None = None):
+def analyze_text(
+    text: str,
+    source: str = "text",
+    db: Optional[Session] = None
+):
     words = text.split()
 
     avg = round(sum(len(w) for w in words) / len(words), 2) if words else 0
@@ -93,7 +99,7 @@ def analyze_text(text: str, source="text", db: Session | None = None):
         "particulas": particles
     }
 
-    if db:
+    if db is not None:
         entry = Analysis(
             source=source,
             text=text,
@@ -113,7 +119,7 @@ def analyze_text(text: str, source="text", db: Session | None = None):
 # --------------------
 @app.post("/analyze")
 def analyze(data: dict, db: Session = Depends(get_db)):
-    return analyze_text(data["text"], source="text", db=db)
+    return analyze_text(data.get("text", ""), source="text", db=db)
 
 @app.post("/ocr")
 async def ocr(file: UploadFile = File(...), db: Session = Depends(get_db)):
@@ -136,7 +142,7 @@ def history(db: Session = Depends(get_db)):
             "source": r.source,
             "hypothesis": r.hypothesis,
             "entropy": r.entropy,
-            "created_at": r.created_at
+            "created_at": r.created_at.isoformat()
         }
         for r in records
     ]
