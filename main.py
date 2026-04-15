@@ -4,12 +4,10 @@ from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
 from sqlalchemy.orm import sessionmaker, declarative_base
 from collections import Counter
 from datetime import datetime
-import math, io, re
+import math, io
 import numpy as np
 from PIL import Image
 import pytesseract
-from pydantic import BaseModel
-from typing import List, Dict
 
 # --------------------
 # APP
@@ -87,6 +85,72 @@ def ngram_concentration(text: str, n: int, top_k: int = 5):
     return round(top / total, 3)
 
 # --------------------
+# CONFIDENCE SYSTEM ✅
+# --------------------
+def clamp(x, a=0.0, b=1.0):
+    return max(a, min(x, b))
+
+def confidence_score(ent, zipf, ttr, repetition, bigram_c, trigram_c):
+    entropy_s = clamp((ent - 2.5) / (4.8 - 2.5))
+    zipf_s = clamp((abs(zipf) - 0.6) / (1.0 - 0.6)) if zipf else 0.0
+    ttr_s = clamp((ttr - 0.2) / (0.6 - 0.2))
+    repetition_s = clamp(1 - repetition)
+    ngram_s = clamp(1 - ((bigram_c + trigram_c) / 2))
+
+    score = (
+        0.25 * entropy_s +
+        0.20 * zipf_s +
+        0.20 * ttr_s +
+        0.20 * repetition_s +
+        0.15 * ngram_s
+    )
+
+    if zipf is None:
+        score -= 0.05
+    if ent > 5.2 and ngram_s > 0.8:
+        score -= 0.1
+    if ttr < 0.2:
+        score -= 0.1
+
+    return round(clamp(score), 3)
+
+def confidence_label(score):
+    if score >= 0.85:
+        return "Muy alta confianza"
+    if score >= 0.70:
+        return "Alta confianza"
+    if score >= 0.50:
+        return "Confianza media"
+    if score >= 0.30:
+        return "Baja confianza"
+    return "No concluyente"
+
+def confidence_explanation(ent, zipf, ttr, repetition, bigram_c, trigram_c):
+    exp = []
+
+    if 3.2 <= ent <= 4.8:
+        exp.append("La entropía se sitúa en un rango típico del lenguaje estructurado.")
+    elif ent > 5.0:
+        exp.append("La entropía es elevada, compatible con estructura no lingüística.")
+    else:
+        exp.append("La entropía es baja, indicando repetición o simplificación.")
+
+    if zipf and abs(zipf) > 0.85:
+        exp.append("La distribución léxica sigue la ley de Zipf.")
+    else:
+        exp.append("La distribución léxica se desvía del patrón Zipf.")
+
+    if ttr < 0.25:
+        exp.append("La variedad léxica es reducida.")
+    else:
+        exp.append("La variedad léxica es adecuada.")
+
+    if (bigram_c + trigram_c) / 2 > 0.2:
+        exp.append("Existe concentración significativa de n‑gramas.")
+
+    return exp
+
+# --------------------
 # ANALYSIS CORE
 # --------------------
 def analyze_and_store(text: str, source: str):
@@ -107,6 +171,8 @@ def analyze_and_store(text: str, source: str):
         hypothesis = "Texto no lingüístico / cifrado"
     elif ttr < 0.25:
         hypothesis = "Texto repetitivo o simplificado"
+
+    conf = confidence_score(ent, zipf, ttr, rep, bigram_c, trigram_c)
 
     db = SessionLocal()
     entry = Analysis(
@@ -130,6 +196,11 @@ def analyze_and_store(text: str, source: str):
         "id": entry.id,
         "texto": text,
         "hipotesis": hypothesis,
+        "confidence": conf,
+        "confidence_label": confidence_label(conf),
+        "confidence_explanation": confidence_explanation(
+            ent, zipf, ttr, rep, bigram_c, trigram_c
+        ),
         "longitud_media": avg,
         "repeticion": rep,
         "entropia": ent,
@@ -140,7 +211,7 @@ def analyze_and_store(text: str, source: str):
     }
 
 # --------------------
-# ENDPOINTS RSDJ
+# ENDPOINTS
 # --------------------
 @app.post("/analyze")
 def analyze(data: dict):
@@ -183,112 +254,3 @@ def get_analysis(id: int):
         "bigram_conc": r.bigram_conc,
         "trigram_conc": r.trigram_conc,
     }
-
-# ============================================================
-# ======================= LFV MODULE =========================
-# ============================================================
-
-# --------------------
-# LFV MODELS
-# --------------------
-class LFVRequest(BaseModel):
-    text: str
-
-class LFVSegment(BaseModel):
-    token: str
-    roles: List[str]
-    function: str
-
-class LFVResponse(BaseModel):
-    segments: List[LFVSegment]
-    synthesis: Dict[str, str]
-
-# --------------------
-# LFV DICTIONARIES
-# --------------------
-FORMS = {"cho", "chol", "chor", "che", "chey", "cheor", "cthol", "chody"}
-PROCESSES = {"aiin", "daiin", "otaiin", "kaiin", "oiin", "saiin"}
-OPERATORS = {"qo", "qok", "qot", "ok", "ot"}
-MODIFIERS_PREFIX = {"sh", "ch", "kch", "cph", "pch", "tch"}
-CLOSURES = {"dy", "dal", "dam", "ar", "or", "am", "ody", "dain"}
-
-# --------------------
-# LFV FUNCTIONS
-# --------------------
-def detect_roles(token: str) -> List[str]:
-    roles = []
-    base = re.sub(r"[^a-z]", "", token.lower())
-
-    for m in MODIFIERS_PREFIX:
-        if base.startswith(m):
-            roles.append("M")
-    for o in OPERATORS:
-        if base.startswith(o):
-            roles.append("O")
-    for f in FORMS:
-        if f in base:
-            roles.append("F")
-    for p in PROCESSES:
-        if p in base:
-            roles.append("P")
-    for c in CLOSURES:
-        if base.endswith(c):
-            roles.append("C")
-
-    return list(dict.fromkeys(roles))
-
-def functional_translation(roles: List[str]) -> str:
-    if set(["F", "P", "C"]).issubset(roles):
-        return "ciclo funcional completo"
-    if roles == ["F"]:
-        return "forma estable"
-    if roles == ["P"]:
-        return "proceso activo"
-    if roles == ["C"]:
-        return "cierre estructural"
-    if "F" in roles and "P" in roles:
-        return "expansión estructural"
-    if "P" in roles and "C" in roles:
-        return "proceso con cierre"
-    if "O" in roles:
-        return "regulación direccional"
-    return "variación estructural"
-
-def synthesize(segments: List[LFVSegment]) -> Dict[str, str]:
-    roles = [r for s in segments for r in s.roles]
-    if roles.count("F") > roles.count("C"):
-        return {
-            "patron": "forma → proceso",
-            "estado": "expansión",
-            "rol": "fase constructiva"
-        }
-    return {
-        "patron": "proceso → cierre",
-        "estado": "consolidación",
-        "rol": "fase estabilizada"
-    }
-
-# --------------------
-# LFV ENDPOINT
-# --------------------
-@app.post("/lfv/analyze", response_model=LFVResponse)
-def lfv_analyze(data: LFVRequest):
-    tokens = re.split(r"[.\s]+", data.text.strip())
-    segments = []
-
-    for t in tokens:
-        if not t:
-            continue
-        r = detect_roles(t)
-        segments.append(
-            LFVSegment(
-                token=t,
-                roles=r,
-                function=functional_translation(r)
-            )
-        )
-
-    return LFVResponse(
-        segments=segments,
-        synthesis=synthesize(segments)
-    )
