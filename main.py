@@ -91,7 +91,7 @@ def ngram_concentration(text: str, n: int, top_k: int = 5):
     return round(top / total, 3)
 
 # ============================================================
-# LFV CORE (INTEGRADO)
+# LFV CORE
 # ============================================================
 
 class LFVState(Enum):
@@ -208,7 +208,6 @@ def analyze_and_store(text: str, source: str):
     trigram_c = ngram_concentration(text.lower(), 3)
 
     hypothesis = "Estructura mixta"
-
     lfv_result = LFVEngine().analizar(text)
 
     db = SessionLocal()
@@ -243,7 +242,7 @@ def analyze_and_store(text: str, source: str):
     }
 
 # ============================================================
-# ENDPOINTS EXISTENTES
+# ENDPOINTS
 # ============================================================
 
 @app.post("/analyze")
@@ -261,7 +260,7 @@ async def ocr(file: UploadFile = File(...)):
     return analyze_and_store(text, source="ocr")
 
 # ============================================================
-# ====== AÑADIDO FINAL: TRADUCCIÓN LFV REAL ==================
+# LFV TRANSLATION ENDPOINT
 # ============================================================
 
 def lfv_traduccion_semantica(estado_final: str) -> str:
@@ -277,10 +276,7 @@ def lfv_traduccion_semantica(estado_final: str) -> str:
 
 @app.post("/lfv/translate")
 def lfv_translate(data: dict):
-    text = data.get("text", "")
-    engine = LFVEngine()
-    resultado = engine.analizar(text)
-
+    resultado = LFVEngine().analizar(data.get("text", ""))
     return {
         "estado_final": resultado["estado_final"],
         "segmentos": resultado["segmentos"],
