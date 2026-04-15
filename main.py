@@ -4,10 +4,12 @@ from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
 from sqlalchemy.orm import sessionmaker, declarative_base
 from collections import Counter
 from datetime import datetime
-import math, io
+import math, io, re
 import numpy as np
 from PIL import Image
 import pytesseract
+from pydantic import BaseModel
+from typing import List, Dict
 
 # --------------------
 # APP
@@ -138,7 +140,7 @@ def analyze_and_store(text: str, source: str):
     }
 
 # --------------------
-# ENDPOINTS
+# ENDPOINTS RSDJ
 # --------------------
 @app.post("/analyze")
 def analyze(data: dict):
@@ -181,3 +183,112 @@ def get_analysis(id: int):
         "bigram_conc": r.bigram_conc,
         "trigram_conc": r.trigram_conc,
     }
+
+# ============================================================
+# ======================= LFV MODULE =========================
+# ============================================================
+
+# --------------------
+# LFV MODELS
+# --------------------
+class LFVRequest(BaseModel):
+    text: str
+
+class LFVSegment(BaseModel):
+    token: str
+    roles: List[str]
+    function: str
+
+class LFVResponse(BaseModel):
+    segments: List[LFVSegment]
+    synthesis: Dict[str, str]
+
+# --------------------
+# LFV DICTIONARIES
+# --------------------
+FORMS = {"cho", "chol", "chor", "che", "chey", "cheor", "cthol", "chody"}
+PROCESSES = {"aiin", "daiin", "otaiin", "kaiin", "oiin", "saiin"}
+OPERATORS = {"qo", "qok", "qot", "ok", "ot"}
+MODIFIERS_PREFIX = {"sh", "ch", "kch", "cph", "pch", "tch"}
+CLOSURES = {"dy", "dal", "dam", "ar", "or", "am", "ody", "dain"}
+
+# --------------------
+# LFV FUNCTIONS
+# --------------------
+def detect_roles(token: str) -> List[str]:
+    roles = []
+    base = re.sub(r"[^a-z]", "", token.lower())
+
+    for m in MODIFIERS_PREFIX:
+        if base.startswith(m):
+            roles.append("M")
+    for o in OPERATORS:
+        if base.startswith(o):
+            roles.append("O")
+    for f in FORMS:
+        if f in base:
+            roles.append("F")
+    for p in PROCESSES:
+        if p in base:
+            roles.append("P")
+    for c in CLOSURES:
+        if base.endswith(c):
+            roles.append("C")
+
+    return list(dict.fromkeys(roles))
+
+def functional_translation(roles: List[str]) -> str:
+    if set(["F", "P", "C"]).issubset(roles):
+        return "ciclo funcional completo"
+    if roles == ["F"]:
+        return "forma estable"
+    if roles == ["P"]:
+        return "proceso activo"
+    if roles == ["C"]:
+        return "cierre estructural"
+    if "F" in roles and "P" in roles:
+        return "expansión estructural"
+    if "P" in roles and "C" in roles:
+        return "proceso con cierre"
+    if "O" in roles:
+        return "regulación direccional"
+    return "variación estructural"
+
+def synthesize(segments: List[LFVSegment]) -> Dict[str, str]:
+    roles = [r for s in segments for r in s.roles]
+    if roles.count("F") > roles.count("C"):
+        return {
+            "patron": "forma → proceso",
+            "estado": "expansión",
+            "rol": "fase constructiva"
+        }
+    return {
+        "patron": "proceso → cierre",
+        "estado": "consolidación",
+        "rol": "fase estabilizada"
+    }
+
+# --------------------
+# LFV ENDPOINT
+# --------------------
+@app.post("/lfv/analyze", response_model=LFVResponse)
+def lfv_analyze(data: LFVRequest):
+    tokens = re.split(r"[.\s]+", data.text.strip())
+    segments = []
+
+    for t in tokens:
+        if not t:
+            continue
+        r = detect_roles(t)
+        segments.append(
+            LFVSegment(
+                token=t,
+                roles=r,
+                function=functional_translation(r)
+            )
+        )
+
+    return LFVResponse(
+        segments=segments,
+        synthesis=synthesize(segments)
+    )
