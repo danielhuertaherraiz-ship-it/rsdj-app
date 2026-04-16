@@ -2,40 +2,65 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>RSDJ — Comunidad</title>
+<title>RSDJ — Análisis y Comunidad</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <style>
 body { font-family: system-ui; background:#f4f6f8; padding:1rem; }
 .card { background:white; padding:1rem; border-radius:12px; margin-bottom:1rem; }
-button { padding:0.5rem 1rem; margin-top:0.5rem; }
-.feed-card { background:white; padding:1rem; border-radius:12px; margin-bottom:1rem; }
+button { padding:0.6rem 1rem; margin-top:0.5rem; border-radius:8px; border:none; background:#2563eb; color:white; cursor:pointer; }
+textarea, input { width:100%; margin-top:0.5rem; }
+.feed-card { background:white; padding:1rem; border-radius:12px; margin-bottom:1rem; cursor:pointer; }
+.meta { font-size:0.85em; color:#555; }
+hr { margin:1.2rem 0; }
 </style>
 </head>
+
 <body>
 
 <h2>RSDJ — Análisis y Comunidad</h2>
 
-<input id="username" placeholder="Usuario">
-<button onclick="createUser()">Crear usuario</button>
-
+<!-- USUARIO -->
 <div class="card">
-<textarea id="textInput" style="width:100%;height:90px;"></textarea>
-<button onclick="analyze()">Analizar</button>
+  <input id="username" placeholder="Usuario (opcional)">
+  <button onclick="createUser()">Crear usuario</button>
 </div>
 
-<div class="card" id="result">Esperando análisis…</div>
+<!-- ANALISIS -->
+<div class="card">
+  <textarea id="textInput" rows="5" placeholder="Introduce un texto para analizar..."></textarea>
+  <button onclick="analyze()">Analizar</button>
+</div>
 
-<h3>📡 Feed</h3>
+<!-- RESULTADO -->
+<div class="card" id="result">
+  Esperando análisis…
+</div>
+
+<!-- COMPARACION SEMANTICA -->
+<div class="card">
+  <h3>🔀 Comparación semántica (LFV)</h3>
+  <textarea id="textA" rows="3" placeholder="Texto A"></textarea>
+  <textarea id="textB" rows="3" placeholder="Texto B"></textarea>
+  <button onclick="compare()">Comparar</button>
+  <div id="compareResult" class="meta"></div>
+</div>
+
+<hr>
+
+<h3>📡 Feed público</h3>
 <div id="feed"></div>
 
 <script>
 const API = "https://rsdj-api.onrender.com";
 let currentUserId = null;
 
+/* ========= USUARIO ========= */
 async function createUser() {
+  if (!username.value) return alert("Introduce un nombre de usuario");
   const r = await fetch(API + "/users", {
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username: username.value })
   });
   const u = await r.json();
@@ -43,58 +68,103 @@ async function createUser() {
   alert("Usuario creado: @" + u.username);
 }
 
+/* ========= ANALISIS ========= */
 function analyze() {
   fetch(API + "/analyze", {
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify({ text:textInput.value, user_id:currentUserId })
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      text: textInput.value,
+      user_id: currentUserId
+    })
   })
   .then(r => r.json())
-  .then(show);
+  .then(showAnalysis);
 }
 
-function show(d) {
-  result.innerHTML = `
+function showAnalysis(d) {
+  let html = `
     <b>Hipótesis:</b> ${d.hipotesis}<br>
-    <b>Traducción LFV:</b><br><i>${d.lfv_fase_3}</i>
-    <textarea id="commentText" placeholder="Comenta..."></textarea>
+    <b>Entropía:</b> ${d.entropia}<br>
+    <b>LFV Fase 1:</b> ${d.lfv_fase_1}<br>
+    <b>LFV Secuencia:</b> ${d.lfv_fase_2.join(" → ")}<br>
+    <hr>
+    <b>Traducción funcional (LFV Fase 3)</b><br>
+    <i>${d.lfv_fase_3}</i>
+  `;
+
+  if (d.lfv_fase_4) {
+    html += `
+      <hr>
+      <b>Interpretación semántica (LFV Fase 4)</b><br>
+      <i>${d.lfv_fase_4}</i>
+    `;
+  }
+
+  html += `
+    <hr>
+    <textarea id="commentText" rows="2" placeholder="Comentar..."></textarea>
     <button onclick="comment(${d.id})">Comentar</button>
   `;
+
+  result.innerHTML = html;
 }
 
+/* ========= COMENTARIOS ========= */
 async function comment(id) {
+  if (!commentText.value) return;
   await fetch(API + "/comment", {
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      analysis_id:id,
-      user_id:currentUserId,
-      content:commentText.value
+      analysis_id: id,
+      user_id: currentUserId,
+      content: commentText.value
     })
   });
   loadAnalysis(id);
 }
 
+async function loadAnalysis(id) {
+  const r = await fetch(API + "/analysis/" + id);
+  const d = await r.json();
+  showAnalysis(d);
+}
+
+/* ========= FEED ========= */
 async function loadFeed() {
   const r = await fetch(API + "/feed");
   const data = await r.json();
   feed.innerHTML = "";
+
   data.forEach(p => {
     const div = document.createElement("div");
     div.className = "feed-card";
     div.innerHTML = `
-      <b>${p.hipotesis}</b><br>
-      ${p.texto_preview}<br>
-      <button onclick="loadAnalysis(${p.id})">Ver</button>
+      <b>${p.hipotesis}</b>
+      <div class="meta">LFV: ${p.lfv_fase_1}</div>
+      <div>${p.texto_preview}</div>
+      <div class="meta"><i>${p.lfv_fase_4 ?? ""}</i></div>
     `;
+    div.onclick = () => loadAnalysis(p.id);
     feed.appendChild(div);
   });
 }
 
-async function loadAnalysis(id) {
-  const r = await fetch(API + "/analysis/" + id);
-  const d = await r.json();
-  show(d);
+/* ========= COMPARACION ========= */
+function compare() {
+  fetch(API + "/compare_semantic", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      textA: textA.value,
+      textB: textB.value
+    })
+  })
+  .then(r => r.json())
+  .then(d => {
+    compareResult.innerHTML = `<b>Resultado:</b> ${d.comparacion_lfv}`;
+  });
 }
 
 loadFeed();
