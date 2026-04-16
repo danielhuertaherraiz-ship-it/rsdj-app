@@ -2,49 +2,68 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>RSDJ + LFV</title>
+<title>RSDJ — Investigación lingüística</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
 body { font-family: system-ui; background:#f4f6f8; padding:1rem; }
-.card { background:#fff; padding:1rem; border-radius:10px; margin-bottom:1rem; }
-textarea { width:100%; min-height:100px; }
-button { padding:0.6rem 1rem; margin-top:0.5rem; }
-pre { background:#f0f2f5; padding:1rem; border-radius:8px; }
+.card { background:white; padding:1rem; border-radius:12px; margin-bottom:1rem; }
+button { width:100%; padding:0.7rem; border-radius:10px; border:none; background:#2563eb; color:white; }
+.result { background:#f5f7fa; padding:1rem; border-radius:10px; }
+.hint { font-size:0.85em; color:#555; margin-top:0.4rem; }
 </style>
 </head>
+
 <body>
 
-<h2>RSDJ — Análisis y LFV</h2>
+<h2>RSDJ — Análisis lingüístico</h2>
 
 <div class="card">
-<textarea id="textInput" placeholder="Introduce texto"></textarea>
-<br>
+<textarea id="textInput" placeholder="Introduce un texto..."></textarea>
 <button onclick="analyze()">Analizar</button>
-<button onclick="analyzeLFV()">Analizar LFV</button>
 </div>
 
-<div class="card">
-<pre id="result">Esperando análisis…</pre>
-</div>
+<div class="card result" id="result">Esperando análisis…</div>
 
 <script>
+/* ✅ CAMBIO CRÍTICO: backend real */
 const API = "http://127.0.0.1:8000";
 
-async function analyze(){
-  const r = await fetch(API + "/analyze", {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({text: textInput.value})
-  });
-  result.textContent = JSON.stringify(await r.json(), null, 2);
-}
+function analyze() {
+  fetch(API + "/analyze", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      text: document.getElementById("textInput").value
+    })
+  })
+  .then(r => {
+    if (!r.ok) {
+      throw new Error("Error en la respuesta del backend");
+    }
+    return r.json();
+  })
+  .then(d => {
+    document.getElementById("result").innerHTML = `
+      <b>Hipótesis:</b> ${d.hipotesis}<br>
+      <b>Entropía:</b> ${d.entropia}<br>
+      <b>Zipf:</b> ${d.zipf ?? "insuficiente"}<br>
+      <b>TTR:</b> ${d.ttr}<br>
+      <b>Concentración bigramas:</b> ${d.bigram_conc}<br>
+      <b>Concentración trigramas:</b> ${d.trigram_conc}<br>
 
-async function analyzeLFV(){
-  const r = await fetch(API + "/lfv/translate", {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({text: textInput.value})
+      <div class="hint">
+        ${
+          d.bigram_conc > 0.15
+          ? "Alta regularidad de n‑gramas → patrón lingüístico natural."
+          : "Distribución plana de n‑gramas → posible texto artificial."
+        }
+      </div>
+    `;
+  })
+  .catch(err => {
+    document.getElementById("result").innerHTML =
+      "<b>Error:</b> " + err.message;
   });
-  result.textContent = JSON.stringify(await r.json(), null, 2);
 }
 </script>
 
