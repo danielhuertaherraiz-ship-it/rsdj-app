@@ -27,12 +27,17 @@ app.add_middleware(
 # ============================================================
 
 DATABASE_URL = "sqlite:///./rsdj.db"
-
-engine = create_engine(
-    DATABASE_URL, connect_args={"check_same_thread": False}
-)
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
+
+# -------------------- MODELS --------------------
+
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True)
+    username = Column(String, unique=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 class Analysis(Base):
     __tablename__ = "analyses"
@@ -50,6 +55,8 @@ class Analysis(Base):
     trigram_conc = Column(Float)
     lfv_state = Column(String)
     lfv_sequence = Column(String)
+    lfv_translation = Column(String)
+    user_id = Column(Integer)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 Base.metadata.create_all(bind=engine)
@@ -63,9 +70,7 @@ def entropy(text: str) -> float:
         return 0.0
     freq = Counter(text)
     total = len(text)
-    return round(
-        -sum((c / total) * math.log2(c / total) for c in freq.values()), 3
-    )
+    return round(-sum((c / total) * math.log2(c / total) for c in freq.values()), 3)
 
 def zipf_score(words):
     if len(words) < 10:
@@ -108,16 +113,36 @@ def lfv_phase_1(words):
 # ============================================================
 
 def lfv_phase_2(words, window=20):
-    seq = []
-    for i in range(0, len(words), window):
-        seq.append(lfv_phase_1(words[i:i+window]))
-    return seq
+    return [lfv_phase_1(words[i:i+window]) for i in range(0, len(words), window)]
+
+# ============================================================
+# LFV — FASE 3 (TRADUCCIÓN FUNCIONAL)
+# ============================================================
+
+def lfv_phase_3_translation(lfv_sequence):
+    """
+    Traducción funcional simple basada en la secuencia LFV.
+    No semántica profunda todavía.
+    """
+    if not lfv_sequence:
+        return "No se detecta una dinámica estructural clara."
+
+    if "expansion" in lfv_sequence and "densificacion" in lfv_sequence:
+        return "El texto presenta una fase de desarrollo seguida de concentración estructural."
+    if all(s == "expansion" for s in lfv_sequence):
+        return "El texto mantiene una dinámica de expansión continua."
+    if all(s == "densificacion" for s in lfv_sequence):
+        return "El texto muestra una estructura repetitiva y condensada."
+    if "estabilizacion" in lfv_sequence:
+        return "El texto tiende a estabilizar su estructura tras fases previas."
+
+    return "El texto combina dinámicas estructurales sin un patrón dominante."
 
 # ============================================================
 # ANALYSIS CORE
 # ============================================================
 
-def analyze_and_store(text: str, source: str):
+def analyze_and_store(text: str, source: str, user_id=None):
     words = text.split()
 
     avg = round(sum(len(w) for w in words) / len(words), 2) if words else 0
@@ -138,6 +163,7 @@ def analyze_and_store(text: str, source: str):
 
     lfv_state = lfv_phase_1(words)
     lfv_seq = lfv_phase_2(words)
+    lfv_translation = lfv_phase_3_translation(lfv_seq)
 
     db = SessionLocal()
     entry = Analysis(
@@ -152,7 +178,9 @@ def analyze_and_store(text: str, source: str):
         bigram_conc=bigram_c,
         trigram_conc=trigram_c,
         lfv_state=lfv_state,
-        lfv_sequence=",".join(lfv_seq)
+        lfv_sequence=",".join(lfv_seq),
+        lfv_translation=lfv_translation,
+        user_id=user_id
     )
     db.add(entry)
     db.commit()
@@ -161,7 +189,6 @@ def analyze_and_store(text: str, source: str):
 
     return {
         "id": entry.id,
-        "texto": text,
         "hipotesis": hypothesis,
         "entropia": ent,
         "zipf": zipf,
@@ -169,7 +196,8 @@ def analyze_and_store(text: str, source: str):
         "bigram_conc": bigram_c,
         "trigram_conc": trigram_c,
         "lfv_fase_1": lfv_state,
-        "lfv_fase_2": lfv_seq
+        "lfv_fase_2": lfv_seq,
+        "lfv_fase_3": lfv_translation
     }
 
 # ============================================================
@@ -178,15 +206,25 @@ def analyze_and_store(text: str, source: str):
 
 @app.get("/")
 def root():
-    return {
-        "status": "ok",
-        "service": "RSDJ Backend",
-        "endpoints": ["/analyze", "/ocr", "/compare", "/analysis/{id}", "/feed"]
-    }
+    return {"status": "ok", "service": "RSDJ Backend"}
+
+@app.post("/users")
+def create_user(data: dict):
+    db = SessionLocal()
+    user = User(username=data["username"])
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    db.close()
+    return {"id": user.id, "username": user.username}
 
 @app.post("/analyze")
 def analyze(data: dict):
-    return analyze_and_store(data["text"], source="text")
+    return analyze_and_store(
+        data["text"],
+        source="text",
+        user_id=data.get("user_id")
+    )
 
 @app.post("/ocr")
 async def ocr(file: UploadFile = File(...)):
@@ -198,14 +236,7 @@ async def ocr(file: UploadFile = File(...)):
 def compare(data: dict):
     a = analyze_and_store(data["textA"], source="compare")
     b = analyze_and_store(data["textB"], source="compare")
-
-    distance = round(
-        math.sqrt(
-            (a["entropia"] - b["entropia"])**2 +
-            (a["ttr"] - b["ttr"])**2
-        ), 3
-    )
-
+    distance = round(math.sqrt((a["entropia"] - b["entropia"])**2 + (a["ttr"] - b["ttr"])**2), 3)
     return {"distancia_estructural": distance, "A": a, "B": b}
 
 @app.get("/analysis/{id}")
@@ -222,24 +253,16 @@ def get_analysis(id: int):
         "ttr": r.ttr,
         "lfv_fase_1": r.lfv_state,
         "lfv_fase_2": r.lfv_sequence.split(",") if r.lfv_sequence else [],
-        "created_at": r.created_at.isoformat()
+        "lfv_fase_3": r.lfv_translation,
+        "created_at": r.created_at.isoformat(),
+        "user_id": r.user_id
     }
-
-# ============================================================
-# COMUNIDAD — FASE 0 (FEED PÚBLICO)
-# ============================================================
 
 @app.get("/feed")
 def feed(limit: int = 20):
     db = SessionLocal()
-    rows = (
-        db.query(Analysis)
-        .order_by(Analysis.created_at.desc())
-        .limit(limit)
-        .all()
-    )
+    rows = db.query(Analysis).order_by(Analysis.created_at.desc()).limit(limit).all()
     db.close()
-
     return [
         {
             "id": r.id,
@@ -249,7 +272,9 @@ def feed(limit: int = 20):
             "ttr": r.ttr,
             "lfv_fase_1": r.lfv_state,
             "lfv_fase_2": r.lfv_sequence.split(",") if r.lfv_sequence else [],
-            "created_at": r.created_at.isoformat()
+            "lfv_fase_3": r.lfv_translation,
+            "created_at": r.created_at.isoformat(),
+            "user_id": r.user_id
         }
         for r in rows
     ]
