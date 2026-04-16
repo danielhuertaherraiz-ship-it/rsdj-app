@@ -2,14 +2,16 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>RSDJ — Investigación lingüística</title>
+<title>RSDJ — Análisis lingüístico</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <style>
 body { font-family: system-ui; background:#f4f6f8; padding:1rem; }
 .card { background:white; padding:1rem; border-radius:12px; margin-bottom:1rem; }
 button { width:100%; padding:0.7rem; border-radius:10px; border:none; background:#2563eb; color:white; }
 .result { background:#f5f7fa; padding:1rem; border-radius:10px; }
-.hint { font-size:0.85em; color:#555; margin-top:0.4rem; }
+.feed-card { background:white; border-radius:12px; padding:1rem; margin-bottom:1rem; cursor:pointer; }
+.feed-meta { font-size:0.85em; color:#555; }
 </style>
 </head>
 
@@ -18,53 +20,70 @@ button { width:100%; padding:0.7rem; border-radius:10px; border:none; background
 <h2>RSDJ — Análisis lingüístico</h2>
 
 <div class="card">
-<textarea id="textInput" placeholder="Introduce un texto..."></textarea>
+<textarea id="textInput" placeholder="Introduce un texto..." style="width:100%;height:90px;"></textarea>
 <button onclick="analyze()">Analizar</button>
 </div>
 
 <div class="card result" id="result">Esperando análisis…</div>
 
-<script>
-/* ✅ CAMBIO CRÍTICO: backend real */
-const API = "http://127.0.0.1:8000";
+<hr>
+<h3>📡 Feed público</h3>
+<div id="feed"></div>
 
+<script>
+const API = "https://rsdj-api.onrender.com";
+
+/* ===== Análisis ===== */
 function analyze() {
   fetch(API + "/analyze", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      text: document.getElementById("textInput").value
-    })
+    body: JSON.stringify({ text: textInput.value })
   })
-  .then(r => {
-    if (!r.ok) {
-      throw new Error("Error en la respuesta del backend");
-    }
-    return r.json();
-  })
-  .then(d => {
-    document.getElementById("result").innerHTML = `
-      <b>Hipótesis:</b> ${d.hipotesis}<br>
-      <b>Entropía:</b> ${d.entropia}<br>
-      <b>Zipf:</b> ${d.zipf ?? "insuficiente"}<br>
-      <b>TTR:</b> ${d.ttr}<br>
-      <b>Concentración bigramas:</b> ${d.bigram_conc}<br>
-      <b>Concentración trigramas:</b> ${d.trigram_conc}<br>
+  .then(r => r.json())
+  .then(show);
+}
 
-      <div class="hint">
-        ${
-          d.bigram_conc > 0.15
-          ? "Alta regularidad de n‑gramas → patrón lingüístico natural."
-          : "Distribución plana de n‑gramas → posible texto artificial."
-        }
+function show(d) {
+  result.innerHTML = `
+    <b>Hipótesis:</b> ${d.hipotesis}<br>
+    <b>Entropía:</b> ${d.entropia}<br>
+    <b>Zipf:</b> ${d.zipf ?? "insuficiente"}<br>
+    <b>TTR:</b> ${d.ttr}<br>
+    <b>LFV:</b> ${d.lfv_fase_1}
+  `;
+}
+
+/* ===== Feed público ===== */
+async function loadFeed() {
+  const r = await fetch(API + "/feed");
+  const data = await r.json();
+
+  feed.innerHTML = "";
+  data.forEach(p => {
+    const div = document.createElement("div");
+    div.className = "feed-card";
+    div.innerHTML = `
+      <b>${p.hipotesis}</b><br>
+      <div class="feed-meta">
+        Entropía: ${p.entropia} · TTR: ${p.ttr} · LFV: ${p.lfv_fase_1}
+      </div>
+      <div style="margin-top:0.5rem;">
+        ${p.texto_preview}
       </div>
     `;
-  })
-  .catch(err => {
-    document.getElementById("result").innerHTML =
-      "<b>Error:</b> " + err.message;
+    div.onclick = () => loadAnalysis(p.id);
+    feed.appendChild(div);
   });
 }
+
+async function loadAnalysis(id) {
+  const r = await fetch(API + "/analysis/" + id);
+  const d = await r.json();
+  show(d);
+}
+
+loadFeed();
 </script>
 
 </body>
