@@ -49,6 +49,7 @@ class Analysis(Base):
     bigram_conc = Column(Float)
     trigram_conc = Column(Float)
     lfv_state = Column(String)
+    lfv_sequence = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 Base.metadata.create_all(bind=engine)
@@ -89,26 +90,32 @@ def ngram_concentration(text: str, n: int, top_k: int = 5):
     return round(top / total, 3)
 
 # ============================================================
-# LFV — FASE 1 (ESTRUCTURAL SIMPLE)
+# LFV — FASE 1
 # ============================================================
 
 def lfv_phase_1(words):
-    """
-    Clasificación LFV básica:
-    - alta repetición -> DENSIFICACION
-    - alta diversidad -> EXPANSION
-    - neutral -> ESTABILIZACION
-    """
     if not words:
         return "indeterminado"
-
     ttr = len(set(words)) / len(words)
-
     if ttr < 0.3:
         return "densificacion"
     if ttr > 0.6:
         return "expansion"
     return "estabilizacion"
+
+# ============================================================
+# LFV — FASE 2 (SECUENCIAL)
+# ============================================================
+
+def lfv_phase_2(words, window=20):
+    """
+    Devuelve una secuencia de estados LFV por ventanas
+    """
+    sequence = []
+    for i in range(0, len(words), window):
+        chunk = words[i:i+window]
+        sequence.append(lfv_phase_1(chunk))
+    return sequence
 
 # ============================================================
 # ANALYSIS CORE
@@ -133,8 +140,8 @@ def analyze_and_store(text: str, source: str):
     elif ttr < 0.25:
         hypothesis = "Texto repetitivo o simplificado"
 
-    # LFV Fase 1
     lfv_state = lfv_phase_1(words)
+    lfv_seq = lfv_phase_2(words)
 
     db = SessionLocal()
     entry = Analysis(
@@ -148,7 +155,8 @@ def analyze_and_store(text: str, source: str):
         ttr=ttr,
         bigram_conc=bigram_c,
         trigram_conc=trigram_c,
-        lfv_state=lfv_state
+        lfv_state=lfv_state,
+        lfv_sequence=",".join(lfv_seq)
     )
     db.add(entry)
     db.commit()
@@ -158,14 +166,13 @@ def analyze_and_store(text: str, source: str):
     return {
         "texto": text,
         "hipotesis": hypothesis,
-        "longitud_media": avg,
-        "repeticion": rep,
         "entropia": ent,
         "zipf": zipf,
         "ttr": ttr,
         "bigram_conc": bigram_c,
         "trigram_conc": trigram_c,
-        "lfv_fase_1": lfv_state
+        "lfv_fase_1": lfv_state,
+        "lfv_fase_2": lfv_seq
     }
 
 # ============================================================
@@ -174,11 +181,7 @@ def analyze_and_store(text: str, source: str):
 
 @app.get("/")
 def root():
-    return {
-        "status": "ok",
-        "service": "RSDJ Backend",
-        "endpoints": ["/analyze", "/ocr", "/analysis/{id}"]
-    }
+    return {"status": "ok", "service": "RSDJ Backend"}
 
 @app.post("/analyze")
 def analyze(data: dict):
@@ -189,6 +192,24 @@ async def ocr(file: UploadFile = File(...)):
     image = Image.open(io.BytesIO(await file.read()))
     text = pytesseract.image_to_string(image, lang="spa+eng")
     return analyze_and_store(text, source="ocr")
+
+@app.post("/compare")
+def compare(data: dict):
+    a = analyze_and_store(data["textA"], source="compare")
+    b = analyze_and_store(data["textB"], source="compare")
+
+    distance = round(
+        math.sqrt(
+            (a["entropia"] - b["entropia"])**2 +
+            (a["ttr"] - b["ttr"])**2
+        ), 3
+    )
+
+    return {
+        "distancia_estructural": distance,
+        "A": a,
+        "B": b
+    }
 
 @app.get("/analysis/{id}")
 def get_analysis(id: int):
@@ -201,7 +222,6 @@ def get_analysis(id: int):
         "entropia": r.entropy,
         "zipf": r.zipf,
         "ttr": r.ttr,
-        "bigram_conc": r.bigram_conc,
-        "trigram_conc": r.trigram_conc,
-        "lfv_fase_1": r.lfv_state
+        "lfv_fase_1": r.lfv_state,
+        "lfv_fase_2": r.lfv_sequence.split(",")
     }
