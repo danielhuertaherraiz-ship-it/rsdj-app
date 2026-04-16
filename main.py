@@ -108,11 +108,10 @@ def lfv_phase_1(words):
 # ============================================================
 
 def lfv_phase_2(words, window=20):
-    sequence = []
+    seq = []
     for i in range(0, len(words), window):
-        chunk = words[i:i+window]
-        sequence.append(lfv_phase_1(chunk))
-    return sequence
+        seq.append(lfv_phase_1(words[i:i+window]))
+    return seq
 
 # ============================================================
 # ANALYSIS CORE
@@ -207,11 +206,7 @@ def compare(data: dict):
         ), 3
     )
 
-    return {
-        "distancia_estructural": distance,
-        "A": a,
-        "B": b
-    }
+    return {"distancia_estructural": distance, "A": a, "B": b}
 
 @app.get("/analysis/{id}")
 def get_analysis(id: int):
