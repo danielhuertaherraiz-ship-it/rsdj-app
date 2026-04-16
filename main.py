@@ -108,9 +108,6 @@ def lfv_phase_1(words):
 # ============================================================
 
 def lfv_phase_2(words, window=20):
-    """
-    Devuelve una secuencia de estados LFV por ventanas
-    """
     sequence = []
     for i in range(0, len(words), window):
         chunk = words[i:i+window]
@@ -164,6 +161,7 @@ def analyze_and_store(text: str, source: str):
     db.close()
 
     return {
+        "id": entry.id,
         "texto": text,
         "hipotesis": hypothesis,
         "entropia": ent,
@@ -181,7 +179,11 @@ def analyze_and_store(text: str, source: str):
 
 @app.get("/")
 def root():
-    return {"status": "ok", "service": "RSDJ Backend"}
+    return {
+        "status": "ok",
+        "service": "RSDJ Backend",
+        "endpoints": ["/analyze", "/ocr", "/compare", "/analysis/{id}", "/feed"]
+    }
 
 @app.post("/analyze")
 def analyze(data: dict):
@@ -217,11 +219,42 @@ def get_analysis(id: int):
     r = db.query(Analysis).filter(Analysis.id == id).first()
     db.close()
     return {
+        "id": r.id,
         "texto": r.text,
         "hipotesis": r.hypothesis,
         "entropia": r.entropy,
         "zipf": r.zipf,
         "ttr": r.ttr,
         "lfv_fase_1": r.lfv_state,
-        "lfv_fase_2": r.lfv_sequence.split(",")
+        "lfv_fase_2": r.lfv_sequence.split(",") if r.lfv_sequence else [],
+        "created_at": r.created_at.isoformat()
     }
+
+# ============================================================
+# COMUNIDAD — FASE 0 (FEED PÚBLICO)
+# ============================================================
+
+@app.get("/feed")
+def feed(limit: int = 20):
+    db = SessionLocal()
+    rows = (
+        db.query(Analysis)
+        .order_by(Analysis.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    db.close()
+
+    return [
+        {
+            "id": r.id,
+            "texto_preview": r.text[:240] + ("…" if len(r.text) > 240 else ""),
+            "hipotesis": r.hypothesis,
+            "entropia": r.entropy,
+            "ttr": r.ttr,
+            "lfv_fase_1": r.lfv_state,
+            "lfv_fase_2": r.lfv_sequence.split(",") if r.lfv_sequence else [],
+            "created_at": r.created_at.isoformat()
+        }
+        for r in rows
+    ]
