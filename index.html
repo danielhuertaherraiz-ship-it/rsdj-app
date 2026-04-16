@@ -2,29 +2,30 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>RSDJ — Análisis lingüístico</title>
+<title>RSDJ — Comunidad</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
 body { font-family: system-ui; background:#f4f6f8; padding:1rem; }
 .card { background:white; padding:1rem; border-radius:12px; margin-bottom:1rem; }
 button { width:100%; padding:0.7rem; border-radius:10px; border:none; background:#2563eb; color:white; }
-.result { background:#f5f7fa; padding:1rem; border-radius:10px; }
 .feed-card { background:white; border-radius:12px; padding:1rem; margin-bottom:1rem; cursor:pointer; }
-.feed-meta { font-size:0.85em; color:#555; }
+.meta { font-size:0.85em; color:#555; }
 </style>
 </head>
 
 <body>
 
-<h2>RSDJ — Análisis lingüístico</h2>
+<h2>RSDJ — Análisis y Comunidad</h2>
 
 <div class="card">
+<input id="username" placeholder="Usuario (opcional)">
+<button onclick="createUser()">Crear usuario</button>
 <textarea id="textInput" placeholder="Introduce un texto..." style="width:100%;height:90px;"></textarea>
 <button onclick="analyze()">Analizar</button>
 </div>
 
-<div class="card result" id="result">Esperando análisis…</div>
+<div class="card" id="result">Esperando análisis…</div>
 
 <hr>
 <h3>📡 Feed público</h3>
@@ -32,13 +33,24 @@ button { width:100%; padding:0.7rem; border-radius:10px; border:none; background
 
 <script>
 const API = "https://rsdj-api.onrender.com";
+let currentUserId = null;
 
-/* ===== Análisis ===== */
+async function createUser() {
+  const r = await fetch(API + "/users", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({ username: username.value })
+  });
+  const u = await r.json();
+  currentUserId = u.id;
+  alert("Usuario creado: @" + u.username);
+}
+
 function analyze() {
   fetch(API + "/analyze", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text: textInput.value })
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ text: textInput.value, user_id: currentUserId })
   })
   .then(r => r.json())
   .then(show);
@@ -48,29 +60,27 @@ function show(d) {
   result.innerHTML = `
     <b>Hipótesis:</b> ${d.hipotesis}<br>
     <b>Entropía:</b> ${d.entropia}<br>
-    <b>Zipf:</b> ${d.zipf ?? "insuficiente"}<br>
-    <b>TTR:</b> ${d.ttr}<br>
-    <b>LFV:</b> ${d.lfv_fase_1}
+    <b>LFV:</b> ${d.lfv_fase_1}<br>
+    <b>Secuencia:</b> ${d.lfv_fase_2.join(" → ")}<br>
+    <b>Traducción funcional:</b><br>
+    <i>${d.lfv_fase_3}</i>
   `;
 }
 
-/* ===== Feed público ===== */
 async function loadFeed() {
   const r = await fetch(API + "/feed");
   const data = await r.json();
-
   feed.innerHTML = "";
   data.forEach(p => {
     const div = document.createElement("div");
     div.className = "feed-card";
     div.innerHTML = `
-      <b>${p.hipotesis}</b><br>
-      <div class="feed-meta">
-        Entropía: ${p.entropia} · TTR: ${p.ttr} · LFV: ${p.lfv_fase_1}
+      <b>${p.hipotesis}</b>
+      <div class="meta">
+        Entropía ${p.entropia} · LFV ${p.lfv_fase_1}
       </div>
-      <div style="margin-top:0.5rem;">
-        ${p.texto_preview}
-      </div>
+      <div>${p.texto_preview}</div>
+      <div><i>${p.lfv_fase_3}</i></div>
     `;
     div.onclick = () => loadAnalysis(p.id);
     feed.appendChild(div);
