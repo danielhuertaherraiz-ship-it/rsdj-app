@@ -9,21 +9,23 @@ import numpy as np
 from PIL import Image
 import pytesseract
 
-# --------------------
+# ============================================================
 # APP
-# --------------------
+# ============================================================
+
 app = FastAPI(title="RSDJ Backend")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],        # ✅ FIX
-    allow_methods=["*"],        # ✅ FIX
+    allow_origins=["*"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# --------------------
+# ============================================================
 # DATABASE
-# --------------------
+# ============================================================
+
 DATABASE_URL = "sqlite:///./rsdj.db"
 
 engine = create_engine(
@@ -33,7 +35,7 @@ SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
 class Analysis(Base):
-    __tablename__ = "analyses"   # ✅ FIX
+    __tablename__ = "analyses"
 
     id = Column(Integer, primary_key=True)
     source = Column(String)
@@ -46,13 +48,15 @@ class Analysis(Base):
     ttr = Column(Float)
     bigram_conc = Column(Float)
     trigram_conc = Column(Float)
+    lfv_state = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 Base.metadata.create_all(bind=engine)
 
-# --------------------
-# METRICS
-# --------------------
+# ============================================================
+# METRICS (RSDJ)
+# ============================================================
+
 def entropy(text: str) -> float:
     if not text:
         return 0.0
@@ -84,9 +88,32 @@ def ngram_concentration(text: str, n: int, top_k: int = 5):
     top = sum(c for _, c in freq.most_common(top_k))
     return round(top / total, 3)
 
-# --------------------
+# ============================================================
+# LFV — FASE 1 (ESTRUCTURAL SIMPLE)
+# ============================================================
+
+def lfv_phase_1(words):
+    """
+    Clasificación LFV básica:
+    - alta repetición -> DENSIFICACION
+    - alta diversidad -> EXPANSION
+    - neutral -> ESTABILIZACION
+    """
+    if not words:
+        return "indeterminado"
+
+    ttr = len(set(words)) / len(words)
+
+    if ttr < 0.3:
+        return "densificacion"
+    if ttr > 0.6:
+        return "expansion"
+    return "estabilizacion"
+
+# ============================================================
 # ANALYSIS CORE
-# --------------------
+# ============================================================
+
 def analyze_and_store(text: str, source: str):
     words = text.split()
 
@@ -106,6 +133,9 @@ def analyze_and_store(text: str, source: str):
     elif ttr < 0.25:
         hypothesis = "Texto repetitivo o simplificado"
 
+    # LFV Fase 1
+    lfv_state = lfv_phase_1(words)
+
     db = SessionLocal()
     entry = Analysis(
         source=source,
@@ -118,10 +148,11 @@ def analyze_and_store(text: str, source: str):
         ttr=ttr,
         bigram_conc=bigram_c,
         trigram_conc=trigram_c,
+        lfv_state=lfv_state
     )
     db.add(entry)
     db.commit()
-    db.refresh(entry)   # ✅ FIX
+    db.refresh(entry)
     db.close()
 
     return {
@@ -134,11 +165,21 @@ def analyze_and_store(text: str, source: str):
         "ttr": ttr,
         "bigram_conc": bigram_c,
         "trigram_conc": trigram_c,
+        "lfv_fase_1": lfv_state
     }
 
-# --------------------
+# ============================================================
 # ENDPOINTS
-# --------------------
+# ============================================================
+
+@app.get("/")
+def root():
+    return {
+        "status": "ok",
+        "service": "RSDJ Backend",
+        "endpoints": ["/analyze", "/ocr", "/analysis/{id}"]
+    }
+
 @app.post("/analyze")
 def analyze(data: dict):
     return analyze_and_store(data["text"], source="text")
@@ -157,11 +198,10 @@ def get_analysis(id: int):
     return {
         "texto": r.text,
         "hipotesis": r.hypothesis,
-        "longitud_media": r.avg_length,
-        "repeticion": r.repetition,
         "entropia": r.entropy,
         "zipf": r.zipf,
         "ttr": r.ttr,
         "bigram_conc": r.bigram_conc,
         "trigram_conc": r.trigram_conc,
+        "lfv_fase_1": r.lfv_state
     }
