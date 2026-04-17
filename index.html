@@ -1,5 +1,7 @@
 <!DOCTYPE html>
-<html lang<meta charset="UTF-8"><html lang="es">
+<html lang="es">
+<head>
+<meta charset="UTF-8">
 <title>LFV Platform — Explora estructura</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#4f46e5">
@@ -14,8 +16,11 @@ body {
   background:#f4f6f8;
   margin:0;
   padding:1rem;
+  padding-bottom:4.5rem; /* espacio para la barra inferior */
 }
+
 h1,h2,h3 { margin-top:0; }
+
 .card {
   background:white;
   padding:1rem;
@@ -23,6 +28,7 @@ h1,h2,h3 { margin-top:0; }
   margin-bottom:1rem;
   box-shadow:0 6px 18px rgba(0,0,0,.06);
 }
+
 textarea {
   width:100%;
   border-radius:10px;
@@ -30,6 +36,7 @@ textarea {
   padding:.6rem;
   font-size:1rem;
 }
+
 button {
   padding:.6rem 1rem;
   border:none;
@@ -38,11 +45,14 @@ button {
   color:white;
   cursor:pointer;
 }
+
 button.secondary {
   background:#e5e7eb;
   color:#111;
 }
+
 .meta { font-size:.85em; color:#555; }
+
 .story {
   background:linear-gradient(135deg,#6366f1,#4f46e5);
   color:white;
@@ -51,7 +61,7 @@ button.secondary {
   margin-bottom:1rem;
 }
 
-/* ===== NAV ===== */
+/* ===== NAV SUPERIOR (YA EXISTENTE) ===== */
 .nav {
   display:flex;
   gap:.5rem;
@@ -62,6 +72,31 @@ button.secondary {
 /* ===== VIEWS ===== */
 .view { display:none; }
 .view.active { display:block; }
+
+/* ===== BARRA INFERIOR (AÑADIDA) ===== */
+.bottom-nav {
+  position:fixed;
+  bottom:0;
+  left:0;
+  right:0;
+  background:white;
+  border-top:1px solid #ddd;
+  display:flex;
+  justify-content:space-around;
+  padding:.4rem 0;
+  z-index:1000;
+}
+
+.bottom-nav button {
+  background:none;
+  border:none;
+  font-size:1.4rem;
+  color:#555;
+}
+
+.bottom-nav button.active {
+  color:#4f46e5;
+}
 </style>
 </head>
 
@@ -69,12 +104,12 @@ button.secondary {
 
 <h1>🧠 LFV Platform</h1>
 
-<!-- ✅ NAVBAR -->
+<!-- NAV SUPERIOR (la dejamos) -->
 <div class="nav">
-  <button onclick="goTo('home')">🏠 Inicio</button>
-  <button onclick="goTo('analyze')">✍️ Analizar</button>
-  <button onclick="goTo('explore')">🔍 Explorar</button>
-  <button onclick="goTo('profile')">👤 Perfil</button>
+  <button onclick="goTo('home')">Inicio</button>
+  <button onclick="goTo('analyze')">Analizar</button>
+  <button onclick="goTo('explore')">Explorar</button>
+  <button onclick="goTo('profile')">Perfil</button>
 </div>
 
 <!-- HOME -->
@@ -87,37 +122,25 @@ button.secondary {
 <div id="view-analyze" class="view">
   <div class="card">
     <h3>Analiza un texto</h3>
-    <textarea id="textInput" rows="4" placeholder="Introduce texto…"></textarea>
+    <textarea id="textInput" rows="4"></textarea>
     <button onclick="analyze()">Analizar</button>
   </div>
 
   <div class="story" id="microLesson" style="display:none;">
-    <b>🧠 Micro‑lección</b>
     <p id="lessonText"></p>
   </div>
 
   <div class="card" id="result">Esperando análisis…</div>
-
-  <div class="card" id="chartCard" style="display:none;">
-    <h3>📊 Perfil estructural</h3>
-    <canvas id="structureChart"></canvas>
-  </div>
-
-  <div class="card" id="exploreCard" style="display:none;">
-    <h3>🔍 Explorar estructura</h3>
-    <p id="exploreText"></p>
-  </div>
 </div>
 
 <!-- PROFILE -->
 <div id="view-profile" class="view">
   <div class="card">
     <h3>👤 Mi perfil</h3>
-    <input id="usernameInput"
-           placeholder="elige un nombre"
+    <input id="usernameInput" placeholder="usuario"
            style="width:100%;padding:.5rem;border-radius:10px;border:1px solid #ccc;">
-    <button onclick="saveUser()">Guardar perfil</button>
-    <p class="meta" id="userStatus"></p>
+    <button onclick="saveUser()">Guardar</button>
+    <p id="userStatus" class="meta"></p>
   </div>
 
   <div class="card">
@@ -130,31 +153,42 @@ button.secondary {
 <div id="view-explore" class="view">
   <div class="card">
     <h3>🔍 Explorar</h3>
-    <p>
-      Aquí se muestran explicaciones guiadas sobre patrones,
-      estructura y regularidad no aleatoria.
-    </p>
+    <p>Patrones, estructura y regularidad no aleatoria.</p>
   </div>
+</div>
+
+<!-- ===== BARRA INFERIOR ===== -->
+<div class="bottom-nav">
+  <button id="tab-home" onclick="goTo('home')">🏠</button>
+  <button id="tab-analyze" onclick="goTo('analyze')">✍️</button>
+  <button id="tab-explore" onclick="goTo('explore')">🔍</button>
+  <button id="tab-profile" onclick="goTo('profile')">👤</button>
 </div>
 
 <script>
 const API = "https://rsdj-api.onrender.com";
-let chartInstance = null;
 let currentUser = null;
 
-/* ===== ROUTER SPA (AÑADIDO) ===== */
+/* ===== ROUTER ===== */
 function goTo(view){
   location.hash = view;
 }
+
 function showView(name){
   document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
-  const el = document.getElementById("view-"+name);
-  if(el) el.classList.add("active");
+  document.getElementById("view-"+name).classList.add("active");
+
+  document.querySelectorAll(".bottom-nav button")
+    .forEach(b=>b.classList.remove("active"));
+  const tab = document.getElementById("tab-"+name);
+  if(tab) tab.classList.add("active");
 }
+
 function router(){
   const hash = location.hash.replace("#","") || "home";
   showView(hash);
 }
+
 window.addEventListener("hashchange", router);
 router();
 
@@ -169,7 +203,7 @@ function saveUser(){
   .then(u=>{
     currentUser = u;
     localStorage.setItem("lfv_user", JSON.stringify(u));
-    userStatus.innerText = "@" + u.username;
+    userStatus.innerText = "@"+u.username;
     loadMyAnalyses();
   });
 }
@@ -177,7 +211,7 @@ function saveUser(){
 const stored = localStorage.getItem("lfv_user");
 if(stored){
   currentUser = JSON.parse(stored);
-  userStatus.innerText = "@" + currentUser.username;
+  userStatus.innerText = "@"+currentUser.username;
   loadMyAnalyses();
 }
 
@@ -194,21 +228,13 @@ function analyze(){
   .then(r=>r.json())
   .then(d=>{
     result.innerHTML = `<b>${d.hipotesis}</b><br>${d.lfv_fase_4}`;
-    lessonText.innerText = "El texto muestra estructura no aleatoria.";
+    lessonText.innerText = "Estructura no aleatoria detectada.";
     microLesson.style.display="block";
     loadFeed();
   });
 }
 
 /* ===== FEED ===== */
-function sendReaction(id,type){
-  fetch(API + "/react", {
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify({ analysis_id:id, type:type })
-  });
-}
-
 async function loadFeed(){
   const r = await fetch(API + "/feed");
   const data = await r.json();
@@ -219,8 +245,6 @@ async function loadFeed(){
         <b>${p.hipotesis}</b>
         <p>${p.texto_preview}</p>
         <p class="meta">${p.lfv_fase_4}</p>
-        <button class="secondary" onclick="sendReaction(${p.id},'learned')">🧠</button>
-        <button class="secondary" onclick="sendReaction(${p.id},'interesting')">⭐</button>
       </div>`;
   });
 }
@@ -246,4 +270,3 @@ loadFeed();
 
 </body>
 </html>
-<head>
