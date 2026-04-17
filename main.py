@@ -1,11 +1,5 @@
 from fastapi import FastAPI, File, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
-from sqlalchemy.orm import sessionmaker, declarative_base
-from collections import Counter
-from datetime import datetime
-import math, io
-import numpy as np
+from fastapi.middleware as npfrom fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
 import pytesseract
 
@@ -62,14 +56,6 @@ class Analysis(Base):
     user_id = Column(Integer)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-class Comment(Base):
-    __tablename__ = "comments"
-    id = Column(Integer, primary_key=True)
-    analysis_id = Column(Integer)
-    user_id = Column(Integer)
-    content = Column(String)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
 class Reaction(Base):
     __tablename__ = "reactions"
     id = Column(Integer, primary_key=True)
@@ -88,7 +74,10 @@ def entropy(text: str) -> float:
         return 0.0
     freq = Counter(text)
     total = len(text)
-    return round(-sum((c / total) * math.log2(c / total) for c in freq.values()), 3)
+    return round(
+        -sum((c / total) * math.log2(c / total) for c in freq.values()),
+        3
+    )
 
 def zipf_score(words):
     if len(words) < 10:
@@ -181,31 +170,29 @@ def analyze_and_store(text, source, user_id=None):
 
     return {
         "id": analysis.id,
-        "entropy": analysis.entropy,
-        "zipf": analysis.zipf,
-        "ttr": analysis.ttr,
-        "bigram": analysis.bigram_conc,
-        "trigram": analysis.trigram_conc,
-        "lfv_fase_1": analysis.lfv_state,
-        "lfv_fase_2": eval(analysis.lfv_sequence),
-        "lfv_fase_3": analysis.lfv_translation,
-        "lfv_fase_4": analysis.lfv_semantic,
-        "hipotesis": analysis.hypothesis
+        "hipotesis": analysis.hypothesis,
+        "lfv_fase_4": analysis.lfv_semantic
     }
 
 # =========================
 # ENDPOINTS
 # =========================
 
+@app.post("/user")
+def create_user(data: dict):
+    db = SessionLocal()
+    user = db.query(User).filter(User.username == data["username"]).first()
+    if not user:
+        user = User(username=data["username"])
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    db.close()
+    return {"id": user.id, "username": user.username}
+
 @app.post("/analyze")
 def analyze(data: dict):
     return analyze_and_store(data["text"], "text", data.get("user_id"))
-
-@app.post("/ocr")
-async def ocr(file: UploadFile = File(...)):
-    image = Image.open(io.BytesIO(await file.read()))
-    text = pytesseract.image_to_string(image, lang="spa+eng")
-    return analyze_and_store(text, "ocr")
 
 @app.get("/feed")
 def feed(limit: int = 20):
@@ -223,66 +210,42 @@ def feed(limit: int = 20):
         for r in rows
     ]
 
-@app.post("/react")
-def react(data: dict):
-    db = SessionLocal()
-    r = Reaction(
-        analysis_id=data["analysis_id"],
-        type=data["type"]
-    )
-    db.add(r)
-    db.commit()
-    db.close()
-    return {"status": "ok"}
-
 @app.get("/user/{user_id}/analyses")
 def user_analyses(user_id: int):
     db = SessionLocal()
-    rows = (
-        db.query(Analysis)
-        .filter(Analysis.user_id == user_id)
-        .order_by(Analysis.created_at.desc())
-        .all()
-    )
+    rows = db.query(Analysis).filter(
+        Analysis.user_id == user_id
+    ).order_by(Analysis.created_at.desc()).all()
     db.close()
     return [
         {
             "id": r.id,
-            "texto_preview": r.text[:200] + ("…" if len(r.text) > 200 else ""),
+            "texto_preview": r.text[:200],
             "hipotesis": r.hypothesis,
-            "lfv_fase_4": r.lfv_semantic,
-            "created_at": r.created_at.isoformat()
+            "lfv_fase_4": r.lfv_semantic
         }
         for r in rows
     ]
 
 @app.get("/user/{user_id}")
-def public_user_profile(user_id: int):
+def public_user(user_id: int):
     db = SessionLocal()
     user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        db.close()
-        return {"error": "Usuario no encontrado"}
-
-    rows = (
-        db.query(Analysis)
-        .filter(Analysis.user_id == user_id)
-        .order_by(Analysis.created_at.desc())
-        .all()
-    )
+    rows = db.query(Analysis).filter(Analysis.user_id == user_id).all()
     db.close()
-
     return {
-        "id": user.id,
         "username": user.username,
         "analyses": [
             {
-                "id": r.id,
-                "texto_preview": r.text[:200] + ("…" if len(r.text) > 200 else ""),
                 "hipotesis": r.hypothesis,
-                "lfv_fase_4": r.lfv_semantic,
-                "created_at": r.created_at.isoformat()
+                "texto_preview": r.text[:200],
+                "lfv_fase_4": r.lfv_semantic
             }
             for r in rows
         ]
     }
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
+from sqlalchemy.orm import sessionmaker, declarative_base
+from collections import Counter
+from datetime import datetime
+import math, io
