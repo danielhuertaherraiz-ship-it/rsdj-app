@@ -77,6 +77,14 @@ class Comment(Base):
     content = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+# ✅ NUEVO (NO sustituye a Like)
+class Reaction(Base):
+    __tablename__ = "reactions"
+    id = Column(Integer, primary_key=True)
+    analysis_id = Column(Integer)
+    type = Column(String)   # learned | interesting
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 Base.metadata.create_all(bind=engine)
 
 # =========================
@@ -188,12 +196,10 @@ def analyze_and_store(text, source, user_id=None):
     lfv3 = lfv_phase_3(lfv2)
     lfv4 = lfv_phase_4(lfv2)
 
-    hypothesis = "El texto presenta estructura funcional no aleatoria."
-
     analysis = Analysis(
         source=source,
         text=text,
-        hypothesis=hypothesis,
+        hypothesis="El texto presenta estructura funcional no aleatoria.",
         entropy=ent,
         zipf=zipf,
         ttr=ttr,
@@ -222,7 +228,7 @@ def analyze_and_store(text, source, user_id=None):
         "lfv_fase_2": lfv2,
         "lfv_fase_3": lfv3,
         "lfv_fase_4": lfv4,
-        "hipotesis": hypothesis
+        "hipotesis": analysis.hypothesis
     }
 
 # =========================
@@ -231,11 +237,7 @@ def analyze_and_store(text, source, user_id=None):
 
 @app.post("/analyze")
 def analyze(data: dict):
-    return analyze_and_store(
-        data["text"],
-        "text",
-        data.get("user_id")
-    )
+    return analyze_and_store(data["text"], "text", data.get("user_id"))
 
 @app.post("/ocr")
 async def ocr(file: UploadFile = File(...)):
@@ -261,10 +263,7 @@ def compare_semantic(data: dict):
     a = analyze_and_store(data["textA"], "compare")
     b = analyze_and_store(data["textB"], "compare")
     return {
-        "comparacion_lfv": lfv_phase_5(
-            a["lfv_fase_2"],
-            b["lfv_fase_2"]
-        )
+        "comparacion_lfv": lfv_phase_5(a["lfv_fase_2"], b["lfv_fase_2"])
     }
 
 @app.get("/analysis/{id}")
@@ -299,3 +298,16 @@ def feed(limit: int = 20):
         }
         for r in rows
     ]
+
+# ✅ NUEVO ENDPOINT (NO INTERFIERE)
+@app.post("/react")
+def react(data: dict):
+    db = SessionLocal()
+    r = Reaction(
+        analysis_id=data["analysis_id"],
+        type=data["type"]
+    )
+    db.add(r)
+    db.commit()
+    db.close()
+    return {"status": "ok"}
