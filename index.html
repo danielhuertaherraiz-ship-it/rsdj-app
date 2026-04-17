@@ -2,63 +2,113 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>RSDJ — Análisis y Comunidad</title>
+<title>LFV Platform — Explora estructura</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <style>
-body { font-family: system-ui; background:#f4f6f8; padding:1rem; }
-.card { background:white; padding:1rem; border-radius:12px; margin-bottom:1rem; }
-.feed-card { background:white; padding:1rem; border-radius:12px; margin-bottom:1rem; cursor:pointer; }
-.meta { font-size:.85em; color:#555; }
+body {
+  font-family: system-ui;
+  background: #f4f6f8;
+  margin: 0;
+  padding: 1rem;
+}
+
+h1, h2, h3 {
+  margin-top: 0;
+}
+
+.card {
+  background: white;
+  padding: 1rem;
+  border-radius: 14px;
+  margin-bottom: 1rem;
+  box-shadow: 0 4px 10px rgba(0,0,0,.05);
+}
+
+button {
+  padding: .6rem 1rem;
+  border: none;
+  border-radius: 10px;
+  background: #4f46e5;
+  color: white;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: #e5e7eb;
+  color: #111;
+}
+
+.feed-card {
+  cursor: pointer;
+  transition: transform .15s;
+}
+
+.feed-card:hover {
+  transform: scale(1.01);
+}
+
+.meta {
+  font-size: .85em;
+  color: #555;
+}
+
+.badge {
+  display: inline-block;
+  background: #eef2ff;
+  color: #3730a3;
+  padding: .2rem .5rem;
+  border-radius: 8px;
+  font-size: .75em;
+  margin-right: .3rem;
+}
 </style>
 </head>
+
 <body>
 
-<h2>RSDJ — Análisis y Comunidad</h2>
+<h1>🧠 LFV Platform</h1>
+<p>Explora la <b>estructura</b> de los textos. No traducciones. No significados ocultos.</p>
 
 <div class="card">
-<textarea id="textInput" rows="4" placeholder="Introduce texto"></textarea>
-<button onclick="analyze()">Analizar</button>
+  <h3>Analiza un texto</h3>
+  <textarea id="textInput" rows="4" style="width:100%" placeholder="Introduce texto…"></textarea>
+  <br><br>
+  <button onclick="analyze()">Analizar</button>
 </div>
 
-<div class="card" id="result">Esperando análisis…</div>
-
-<div class="card">
-<h3>🔀 Comparación semántica</h3>
-<textarea id="textA"></textarea>
-<textarea id="textB"></textarea>
-<button onclick="compare()">Comparar</button>
-<div id="compareResult"></div>
+<div class="card" id="result">
+  Esperando análisis…
 </div>
 
-<h3>📡 Feed</h3>
+<h3>📰 Exploraciones recientes</h3>
 <div id="feed"></div>
 
 <script>
 const API = "https://rsdj-api.onrender.com";
 
 function analyze() {
+  result.innerHTML = "Analizando estructura…";
   fetch(API + "/analyze", {
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text: textInput.value })
   })
   .then(r => r.json())
   .then(d => {
     result.innerHTML = `
-      <b>${d.hipotesis}</b><br>
-      <i>${d.lfv_fase_4}</i>
+      <h3>Resultado estructural</h3>
+      <p><b>${d.hipotesis}</b></p>
+      <p class="meta">${d.lfv_fase_4}</p>
+      <div>
+        <span class="badge">Entropía: ${d.entropy}</span>
+        <span class="badge">TTR: ${d.ttr}</span>
+        <span class="badge">Bigramas: ${d.bigram}</span>
+      </div>
+      <p class="meta">Este análisis describe estructura, no significado.</p>
     `;
+    loadFeed();
   });
-}
-
-function compare() {
-  fetch(API + "/compare_semantic", {
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify({ textA: textA.value, textB: textB.value })
-  })
-  .then(r => r.json())
-  .then(d => compareResult.innerText = d.comparacion_lfv);
 }
 
 async function loadFeed() {
@@ -67,17 +117,15 @@ async function loadFeed() {
   feed.innerHTML = "";
   data.forEach(p => {
     const div = document.createElement("div");
-    div.className = "feed-card";
-    div.innerHTML = `<b>${p.hipotesis}</b><br>${p.texto_preview}<br><i>${p.lfv_fase_4}</i>`;
-    div.onclick = () => analyzeById(p.id);
+    div.className = "card feed-card";
+    div.innerHTML = `
+      <p><b>${p.hipotesis}</b></p>
+      <p>${p.texto_preview}</p>
+      <p class="meta">${p.lfv_fase_4}</p>
+      <button class="secondary">📌 Marcar como interesante</button>
+    `;
     feed.appendChild(div);
   });
-}
-
-async function analyzeById(id){
-  const r = await fetch(API + "/analysis/" + id);
-  const d = await r.json();
-  result.innerHTML = `<b>${d.hipotesis}</b><br><i>${d.lfv_fase_4}</i>`;
 }
 
 loadFeed();
