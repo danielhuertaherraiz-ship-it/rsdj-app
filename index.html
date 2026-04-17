@@ -2,108 +2,249 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>LFV Platform <div id="feed"></div><title>LFV Platform — Explora estructura</title>
+<title>LFV Platform — Explora estructura</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#4f46e5">
+
+<link rel="manifest" href="manifest.json">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+/* ===== BASE ===== */
+body {
+  font-family: system-ui;
+  background:#f4f6f8;
+  margin:0;
+  padding:1rem;
+}
+
+h1,h2,h3 { margin-top:0; }
+
+.card {
+  background:white;
+  padding:1rem;
+  border-radius:16px;
+  margin-bottom:1rem;
+  box-shadow:0 6px 18px rgba(0,0,0,.06);
+}
+
+textarea {
+  width:100%;
+  border-radius:10px;
+  border:1px solid #ccc;
+  padding:.6rem;
+  font-size:1rem;
+}
+
+button {
+  padding:.6rem 1rem;
+  border:none;
+  border-radius:999px;
+  background:#4f46e5;
+  color:white;
+  cursor:pointer;
+}
+
+button.secondary {
+  background:#e5e7eb;
+  color:#111;
+}
+
+.meta {
+  font-size:.85em;
+  color:#555;
+}
+
+.story {
+  background:linear-gradient(135deg,#6366f1,#4f46e5);
+  color:white;
+  padding:1rem;
+  border-radius:14px;
+  margin-bottom:1rem;
+}
+
+/* ===== NAV ===== */
+.nav {
+  display:flex;
+  gap:.5rem;
+  margin-bottom:1rem;
+}
+.nav button {
+  flex:1;
+}
+
+/* ===== VIEWS ===== */
+.view {
+  display:none;
+}
+.view.active {
+  display:block;
+}
+</style>
+</head>
+
+<body>
+
+<h1>🧠 LFV Platform</h1>
+
+<!-- ✅ NAVBAR (AÑADIDO) -->
+<div class="nav">
+  <button onclick="showView('home')">🏠 Inicio</button>
+  <button onclick="showView('analyze')">✍️ Analizar</button>
+  <button onclick="showView('explore')">🔍 Explorar</button>
+  <button onclick="showView('profile')">👤 Perfil</button>
 </div>
 
+<!-- ===================== -->
+<!-- 🏠 HOME / FEED -->
+<!-- ===================== -->
+<div id="view-home" class="view active">
+  <h3>📰 Exploraciones recientes</h3>
+  <div id="feed"></div>
+</div>
+
+<!-- ===================== -->
+<!-- ✍️ ANALYZE -->
+<!-- ===================== -->
 <div id="view-analyze" class="view">
-  <textarea id="textInput"></textarea>
-  <button onclick="analyze()">Analizar</button>
-  <div id="result"></div>
+
+  <div class="card">
+    <h3>Analiza un texto</h3>
+    <textarea id="textInput" rows="4" placeholder="Introduce texto…"></textarea>
+    <button onclick="analyze()">Analizar</button>
+  </div>
+
+  <div class="story" id="microLesson" style="display:none;">
+    <b>🧠 Micro‑lección</b>
+    <p id="lessonText"></p>
+  </div>
+
+  <div class="card" id="result">Esperando análisis…</div>
+
+  <div class="card" id="chartCard" style="display:none;">
+    <h3>📊 Perfil estructural</h3>
+    <canvas id="structureChart"></canvas>
+  </div>
+
+  <div class="card" id="exploreCard" style="display:none;">
+    <h3>🔍 Explorar estructura</h3>
+    <p id="exploreText"></p>
+  </div>
 </div>
 
+<!-- ===================== -->
+<!-- 👤 PROFILE -->
+<!-- ===================== -->
 <div id="view-profile" class="view">
-  <input id="usernameInput" placeholder="usuario">
-  <button onclick="saveUser()">Guardar</button>
-  <p id="userStatus"></p>
-  <div id="myAnalyses"></div>
+
+  <div class="card">
+    <h3>👤 Mi perfil</h3>
+    <input id="usernameInput"
+           placeholder="elige un nombre"
+           style="width:100%;padding:.5rem;border-radius:10px;border:1px solid #ccc;">
+    <button onclick="saveUser()">Guardar perfil</button>
+    <p class="meta" id="userStatus"></p>
+  </div>
+
+  <div class="card">
+    <h3>📚 Mis análisis</h3>
+    <div id="myAnalyses"></div>
+  </div>
 </div>
 
-<div id="view-user" class="view">
-  <h3 id="publicUsername"></h3>
-  <div id="publicAnalyses"></div>
-</div>
-
-<div class="bottom-nav">
-  <button onclick="goTo('home')">🏠</button>
-  <button onclick="goTo('profile')">👤</button>
+<!-- ===================== -->
+<!-- 🔍 EXPLORE -->
+<!-- ===================== -->
+<div id="view-explore" class="view">
+  <div class="card">
+    <h3>🔍 Explorar</h3>
+    <p>
+      Aquí se muestran explicaciones guiadas sobre patrones,
+      estructura y regularidad no aleatoria.
+    </p>
+  </div>
 </div>
 
 <script>
-const API="https://rsdj-api.onrender.com";
-let currentUser=null;
+const API = "https://rsdj-api.onrender.com";
+let chartInstance = null;
+let currentUser = null;
 
-function goTo(v){location.hash=v}
-
-function showView(v){
-  document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));
-  const el=document.getElementById("view-"+v);
-  if(el) el.classList.add("active");
+/* ===== SPA NAV ===== */
+function showView(name){
+  document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
+  document.getElementById("view-"+name).classList.add("active");
 }
 
-async function router(){
-  const hash = location.hash.replace("#","") || "home";
-
-  if(hash.startsWith("user/")){
-    const id = hash.split("/")[1];
-    showView("user");
-    const r = await fetch(API+"/user/"+id);
-    const d = await r.json();
-    publicUsername.innerText="@"+d.username;
-    publicAnalyses.innerHTML="";
-    d.analyses.forEach(a=>{
-      publicAnalyses.innerHTML+=`
-        <div class="card">
-          <b>${a.hipotesis}</b>
-          <p>${a.texto_preview}</p>
-          <p class="meta">${a.lfv_fase_4}</p>
-        </div>`;
-    });
-  } else {
-    showView(hash);
-  }
-}
-
-window.addEventListener("hashchange",router);
-router();
-
+/* ===== USUARIO ===== */
 function saveUser(){
-  fetch(API+"/user",{method:"POST",headers:{"Content-Type":"application/json"},
-  body:JSON.stringify({username:usernameInput.value})})
+  fetch(API + "/user", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ username: usernameInput.value })
+  })
   .then(r=>r.json())
   .then(u=>{
-    currentUser=u;
-    localStorage.setItem("lfv_user",JSON.stringify(u));
-    userStatus.innerText="@"+u.username;
-    loadMyAnalyses();
+    currentUser = u;
+    localStorage.setItem("lfv_user", JSON.stringify(u));
+    userStatus.innerText = "@" + u.username;
   });
 }
 
-async function analyze(){
-  const r=await fetch(API+"/analyze",{method:"POST",headers:{"Content-Type":"application/json"},
-  body:JSON.stringify({text:textInput.value,user_id:currentUser?.id})});
-  const d=await r.json();
-  result.innerHTML=`<b>${d.hipotesis}</b><br>${d.lfv_fase_4}`;
-  loadFeed();
+const stored = localStorage.getItem("lfv_user");
+if(stored){
+  currentUser = JSON.parse(stored);
+  userStatus.innerText = "@" + currentUser.username;
+}
+
+/* ===== ANALYSIS ===== */
+function analyze(){
+  fetch(API + "/analyze", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({
+      text:textInput.value,
+      user_id: currentUser ? currentUser.id : null
+    })
+  })
+  .then(r=>r.json())
+  .then(d=>{
+    result.innerHTML = `<b>${d.hipotesis}</b><br>${d.lfv_fase_4}`;
+    lessonText.innerText = "El texto muestra estructura no aleatoria.";
+    microLesson.style.display="block";
+    loadFeed();
+  });
+}
+
+/* ===== FEED ===== */
+function sendReaction(id,type){
+  fetch(API + "/react", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ analysis_id:id, type:type })
+  });
 }
 
 async function loadFeed(){
-  const r=await fetch(API+"/feed");
-  const data=await r.json();
+  const r = await fetch(API + "/feed");
+  const data = await r.json();
   feed.innerHTML="";
   data.forEach(p=>{
     feed.innerHTML+=`
       <div class="card">
         <b>${p.hipotesis}</b>
         <p>${p.texto_preview}</p>
-        <p class="meta">${p.lfv_fase_4id}Ver perfil</a>
+        <p class="meta">${p.lfv_fase_4}</p>
+        <button class="secondary" onclick="sendReaction(${p.id},'learned')">🧠</button>
+        <button class="secondary" onclick="sendReaction(${p.id},'interesting')">⭐</button>
       </div>`;
   });
 }
 
 async function loadMyAnalyses(){
   if(!currentUser) return;
-  const r=await fetch(API+"/user/"+currentUser.id+"/analyses");
-  const data=await r.json();
+  const r = await fetch(API + "/user/" + currentUser.id + "/analyses");
+  const data = await r.json();
   myAnalyses.innerHTML="";
   data.forEach(a=>{
     myAnalyses.innerHTML+=`
@@ -120,30 +261,3 @@ loadFeed();
 
 </body>
 </html>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#4f46e5">
-<link rel="manifest" href="manifest.json">
-
-<style>
-body{font-family:system-ui;background:#f4f6f8;margin:0;padding:1rem;padding-bottom:4.5rem}
-.card{background:white;padding:1rem;border-radius:16px;margin-bottom:1rem}
-.meta{font-size:.85em;color:#555}
-.view{display:none}
-.view.active{display:block}
-.nav,.bottom-nav{display:flex;gap:.5rem}
-.bottom-nav{position:fixed;bottom:0;left:0;right:0;justify-content:space-around;background:white;border-top:1px solid #ddd}
-</style>
-</head>
-
-<body>
-
-<h1>🧠 LFV Platform</h1>
-
-<div class="nav">
-  <button onclick="goTo('home')">Inicio</button>
-  <button onclick="goTo('analyze')">Analizar</button>
-  <button onclick="goTo('explore')">Explorar</button>
-  <button onclick="goTo('profile')">Perfil</button>
-</div>
-
-<div id="view-home" class="view active">
