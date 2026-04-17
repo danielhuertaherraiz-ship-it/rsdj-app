@@ -1,11 +1,9 @@
 <!DOCTYPE html>
 <html lang="es">
-<head>
-<meta charset="UTF-8">
+<head<meta charset="UTF-8"><head>
 <title>LFV Platform — Explora estructura</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#4f46e5">
-
 <link rel="manifest" href="manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
@@ -16,11 +14,9 @@ body {
   background:#f4f6f8;
   margin:0;
   padding:1rem;
-  padding-bottom:4.5rem; /* espacio para la barra inferior */
+  padding-bottom:4.5rem;
 }
-
 h1,h2,h3 { margin-top:0; }
-
 .card {
   background:white;
   padding:1rem;
@@ -28,7 +24,6 @@ h1,h2,h3 { margin-top:0; }
   margin-bottom:1rem;
   box-shadow:0 6px 18px rgba(0,0,0,.06);
 }
-
 textarea {
   width:100%;
   border-radius:10px;
@@ -36,7 +31,6 @@ textarea {
   padding:.6rem;
   font-size:1rem;
 }
-
 button {
   padding:.6rem 1rem;
   border:none;
@@ -45,14 +39,11 @@ button {
   color:white;
   cursor:pointer;
 }
-
 button.secondary {
   background:#e5e7eb;
   color:#111;
 }
-
 .meta { font-size:.85em; color:#555; }
-
 .story {
   background:linear-gradient(135deg,#6366f1,#4f46e5);
   color:white;
@@ -61,7 +52,7 @@ button.secondary {
   margin-bottom:1rem;
 }
 
-/* ===== NAV SUPERIOR (YA EXISTENTE) ===== */
+/* ===== NAV SUPERIOR ===== */
 .nav {
   display:flex;
   gap:.5rem;
@@ -73,7 +64,7 @@ button.secondary {
 .view { display:none; }
 .view.active { display:block; }
 
-/* ===== BARRA INFERIOR (AÑADIDA) ===== */
+/* ===== BARRA INFERIOR ===== */
 .bottom-nav {
   position:fixed;
   bottom:0;
@@ -86,14 +77,12 @@ button.secondary {
   padding:.4rem 0;
   z-index:1000;
 }
-
 .bottom-nav button {
   background:none;
   border:none;
   font-size:1.4rem;
   color:#555;
 }
-
 .bottom-nav button.active {
   color:#4f46e5;
 }
@@ -104,7 +93,7 @@ button.secondary {
 
 <h1>🧠 LFV Platform</h1>
 
-<!-- NAV SUPERIOR (la dejamos) -->
+<!-- NAV SUPERIOR -->
 <div class="nav">
   <button onclick="goTo('home')">Inicio</button>
   <button onclick="goTo('analyze')">Analizar</button>
@@ -137,7 +126,8 @@ button.secondary {
 <div id="view-profile" class="view">
   <div class="card">
     <h3>👤 Mi perfil</h3>
-    <input id="usernameInput" placeholder="usuario"
+    <input id="usernameInput"
+           placeholder="usuario"
            style="width:100%;padding:.5rem;border-radius:10px;border:1px solid #ccc;">
     <button onclick="saveUser()">Guardar</button>
     <p id="userStatus" class="meta"></p>
@@ -157,7 +147,20 @@ button.secondary {
   </div>
 </div>
 
-<!-- ===== BARRA INFERIOR ===== -->
+<!-- ========================= -->
+<!-- ✅ AÑADIDO: PERFIL PÚBLICO -->
+<!-- ========================= -->
+<div id="view-user" class="view">
+  <div class="card">
+    <h3 id="publicUsername"></h3>
+  </div>
+  <div class="card">
+    <h3>📚 Análisis públicos</h3>
+    <div id="publicAnalyses"></div>
+  </div>
+</div>
+
+<!-- BARRA INFERIOR -->
 <div class="bottom-nav">
   <button id="tab-home" onclick="goTo('home')">🏠</button>
   <button id="tab-analyze" onclick="goTo('analyze')">✍️</button>
@@ -169,14 +172,15 @@ button.secondary {
 const API = "https://rsdj-api.onrender.com";
 let currentUser = null;
 
-/* ===== ROUTER ===== */
+/* ===== ROUTER EXISTENTE (AMPLIADO) ===== */
 function goTo(view){
   location.hash = view;
 }
 
 function showView(name){
   document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
-  document.getElementById("view-"+name).classList.add("active");
+  const el = document.getElementById("view-"+name);
+  if(el) el.classList.add("active");
 
   document.querySelectorAll(".bottom-nav button")
     .forEach(b=>b.classList.remove("active"));
@@ -184,9 +188,16 @@ function showView(name){
   if(tab) tab.classList.add("active");
 }
 
-function router(){
+async function router(){
   const hash = location.hash.replace("#","") || "home";
-  showView(hash);
+
+  if(hash.startsWith("user/")){
+    const userId = hash.split("/")[1];
+    showView("user");
+    loadPublicUser(userId);
+  } else {
+    showView(hash);
+  }
 }
 
 window.addEventListener("hashchange", router);
@@ -234,7 +245,7 @@ function analyze(){
   });
 }
 
-/* ===== FEED ===== */
+/* ===== FEED (EXTENDIDO) ===== */
 async function loadFeed(){
   const r = await fetch(API + "/feed");
   const data = await r.json();
@@ -245,9 +256,8 @@ async function loadFeed(){
         <b>${p.hipotesis}</b>
         <p>${p.texto_preview}</p>
         <p class="meta">${p.lfv_fase_4}</p>
-      </div>`;
-  });
-}
+        <p class="meta">
+          <a href="#user}
 
 /* ===== MIS ANALISIS ===== */
 async function loadMyAnalyses(){
@@ -257,6 +267,24 @@ async function loadMyAnalyses(){
   myAnalyses.innerHTML="";
   data.forEach(a=>{
     myAnalyses.innerHTML+=`
+      <div class="card">
+        <b>${a.hipotesis}</b>
+        <p>${a.texto_preview}</p>
+        <p class="meta">${a.lfv_fase_4}</p>
+      </div>`;
+  });
+}
+
+/* ===== PERFIL PÚBLICO ===== */
+async function loadPublicUser(userId){
+  const r = await fetch(API + "/user/" + userId);
+  const data = await r.json();
+
+  publicUsername.innerText = "@"+data.username;
+  publicAnalyses.innerHTML="";
+
+  data.analyses.forEach(a=>{
+    publicAnalyses.innerHTML+=`
       <div class="card">
         <b>${a.hipotesis}</b>
         <p>${a.texto_preview}</p>
