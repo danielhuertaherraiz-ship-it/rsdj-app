@@ -180,6 +180,18 @@ function analyze(){
   });
 }
 
+/* ===== REACCIONES (NUEVO, NO INTRUSIVO) ===== */
+function sendReaction(analysisId, type){
+  fetch(API + "/react", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({
+      analysis_id: analysisId,
+      type: type
+    })
+  });
+}
+
 /* ===== FEED ===== */
 async function loadFeed(){
   const r = await fetch(API + "/feed");
@@ -197,9 +209,17 @@ async function loadFeed(){
       <p class="meta">${p.lfv_fase_4}</p>
 
       <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
-        <button class="secondary">🧠 Aprendí algo</button>
-        <button class="secondary">⭐ Interesante</button>
-        <button class="secondary">🔍 Explorar</button>
+        <button class="secondary"
+          onclick="sendReaction(${p.id}, 'learned')">
+          🧠 Aprendí algo
+        </button>
+        <button class="secondary"
+          onclick="sendReaction(${p.id}, 'interesting')">
+          ⭐ Interesante
+        </button>
+        <button class="secondary">
+          🔍 Explorar
+        </button>
       </div>
     `;
 
