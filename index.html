@@ -1,15 +1,9 @@
 <!DOCTYPE html>
 <html lang="es">
-<head>
-<meta charset="UTF-8">
-<title>LFV Platform — Explora estructura</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#4f46e5">
+-color" content="#4f46e5"><head>
 
-<!-- ✅ PWA: MANIFEST (CORREGIDO, NO BORRA NADA) -->
+<!-- ✅ PWA -->
 <link rel="manifest" href="manifest.json">
-
-<!-- ✅ Chart.js (AÑADIDO) -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
@@ -77,7 +71,6 @@ button.secondary {
   color:#555;
 }
 
-/* ===== MICRO-LECCIÓN ===== */
 .story {
   background:linear-gradient(135deg,#6366f1,#4f46e5);
   color:white;
@@ -86,18 +79,11 @@ button.secondary {
   margin-bottom:1rem;
 }
 
-/* ===== MOBILE FIRST ===== */
 @media (max-width: 768px) {
   body { padding:.5rem; }
-
   h1 { font-size:1.6rem; }
   h3 { font-size:1.1rem; }
-
-  button {
-    width:100%;
-    margin-top:.5rem;
-  }
-
+  button { width:100%; margin-top:.5rem; }
   .card { padding:.9rem; }
 }
 </style>
@@ -125,15 +111,21 @@ No traducciones · No significados ocultos.
 </div>
 
 <!-- RESULTADO -->
-<div class="card" id="result">
-  Esperando análisis…
-</div>
+<div class="card" id="result">Esperando análisis…</div>
 
-<!-- ✅ VISUALIZACIÓN (AÑADIDO) -->
+<!-- GRÁFICO -->
 <div class="card" id="chartCard" style="display:none;">
   <h3>📊 Perfil estructural</h3>
   <canvas id="structureChart"></canvas>
-  <p class="meta">Representación visual de métricas estructurales.</p>
+</div>
+
+<!-- ✅ EXPLORAR (NUEVO) -->
+<div class="card" id="exploreCard" style="display:none;">
+  <h3>🔍 Explorar estructura</h3>
+  <p id="exploreText"></p>
+  <p class="meta">
+    Este bloque explica <b>por qué</b> el patrón observado no es aleatorio.
+  </p>
 </div>
 
 <h3>📰 Exploraciones recientes</h3>
@@ -148,7 +140,7 @@ Analiza únicamente estructura y regularidad simbólica.
 const API = "https://rsdj-api.onrender.com";
 let chartInstance = null;
 
-/* ===== MICRO-LECCIONES ===== */
+/* ===== MICRO-LECCIÓN ===== */
 function generateMicroLesson(a){
   if(a.entropy < 3) return "📊 Entropía baja → el orden importa.";
   if(a.lfv_fase_1 === "densificacion") return "🔁 Patrones repetidos → estructura local.";
@@ -156,10 +148,20 @@ function generateMicroLesson(a){
   return "🧩 Dinámica mixta → sistema no trivial.";
 }
 
-/* ===== GRÁFICO (AÑADIDO) ===== */
+/* ===== EXPLORAR ===== */
+function generateExploreExplanation(d){
+  if(d.entropy < 3 && d.bigram > 0.2){
+    return "Este texto concentra ciertos pares de símbolos mucho más de lo esperado al azar. Esto indica reglas internas de construcción.";
+  }
+  if(d.lfv_fase_1 === "densificacion"){
+    return "Aquí se repiten patrones locales. En un texto aleatorio, esta repetición sostenida no aparece.";
+  }
+  return "La combinación de variación y repetición sugiere un sistema estructurado, aunque no interpretable semánticamente.";
+}
+
+/* ===== GRÁFICO ===== */
 function renderChart(d){
   const ctx = document.getElementById("structureChart");
-
   if(chartInstance) chartInstance.destroy();
 
   chartInstance = new Chart(ctx, {
@@ -167,18 +169,14 @@ function renderChart(d){
     data: {
       labels: ["Entropía", "TTR", "Bigramas", "Trigramas"],
       datasets: [{
-        label: "Métricas estructurales",
         data: [d.entropy, d.ttr, d.bigram, d.trigram],
         backgroundColor: ["#6366f1", "#4f46e5", "#818cf8", "#a5b4fc"]
       }]
     },
-    options: {
-      responsive: true,
-      scales: { y: { beginAtZero: true } }
-    }
+    options: { responsive:true, scales:{ y:{ beginAtZero:true }}}
   });
 
-  document.getElementById("chartCard").style.display = "block";
+  chartCard.style.display = "block";
 }
 
 /* ===== ANALYZE ===== */
@@ -190,22 +188,22 @@ function analyze(){
     headers:{ "Content-Type":"application/json" },
     body: JSON.stringify({ text: textInput.value })
   })
-  .then(r => r.json())
-  .then(d => {
-    result.innerHTML = `
-      <h3>Resultado estructural</h3>
-      <p><b>${d.hipotesis}</b></p>
-      <p class="meta">${d.lfv_fase_4}</p>
-    `;
+  .then(r=>r.json())
+  .then(d=>{
+    result.innerHTML = `<b>${d.hipotesis}</b><br>${d.lfv_fase_4}`;
     lessonText.innerText = generateMicroLesson(d);
     microLesson.style.display = "block";
+
+    exploreText.innerText = generateExploreExplanation(d);
+    exploreCard.style.display = "block";
+
     renderChart(d);
     loadFeed();
   });
 }
 
-/* ===== REACCIONES ===== */
-function sendReaction(id, type){
+/* ===== FEED ===== */
+function sendReaction(id,type){
   fetch(API + "/react", {
     method:"POST",
     headers:{ "Content-Type":"application/json" },
@@ -213,12 +211,12 @@ function sendReaction(id, type){
   });
 }
 
-/* ===== FEED ===== */
 async function loadFeed(){
   const r = await fetch(API + "/feed");
   const data = await r.json();
   feed.innerHTML = "";
-  data.forEach(p => {
+
+  data.forEach(p=>{
     feed.innerHTML += `
       <div class="card feed-card">
         <b>${p.hipotesis}</b>
@@ -232,7 +230,7 @@ async function loadFeed(){
 
 loadFeed();
 
-/* ✅ PWA: SERVICE WORKER */
+/* ✅ PWA */
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js");
 }
@@ -240,3 +238,7 @@ if ("serviceWorker" in navigator) {
 
 </body>
 </html>
+
+<meta charset="UTF-8">
+<title>LFV Platform — Explora estructura</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
