@@ -27,7 +27,10 @@ app.add_middleware(
 # =========================
 
 DATABASE_URL = "sqlite:///./rsdj.db"
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"check_same_thread": False}
+)
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
@@ -85,7 +88,10 @@ def entropy(text: str) -> float:
         return 0.0
     freq = Counter(text)
     total = len(text)
-    return round(-sum((c / total) * math.log2(c / total) for c in freq.values()), 3)
+    return round(
+        -sum((c / total) * math.log2(c / total) for c in freq.values()),
+        3
+    )
 
 def zipf_score(words):
     if len(words) < 10:
@@ -122,7 +128,10 @@ def lfv_phase_1(words):
     return "estabilizacion"
 
 def lfv_phase_2(words, window=20):
-    return [lfv_phase_1(words[i:i+window]) for i in range(0, len(words), window)]
+    return [
+        lfv_phase_1(words[i:i+window])
+        for i in range(0, len(words), window)
+    ]
 
 def lfv_phase_3(seq):
     if not seq:
@@ -164,56 +173,56 @@ def lfv_phase_5(a, b):
 # =========================
 
 def analyze_and_store(text, source, user_id=None):
+    db = SessionLocal()
+
     words = text.split()
 
-    ent = entropy("".join(words))
+    ent = entropy(text)
     zipf = zipf_score(words)
     ttr = ttr_score(words)
-    bg = ngram_concentration(text.lower(), 2)
-    tg = ngram_concentration(text.lower(), 3)
-
-    hypothesis = "Estructura mixta"
-    if zipf and zipf < -0.9 and ttr > 0.4 and bg > 0.15:
-        hypothesis = "Lenguaje natural probable"
-    elif ent > 4.5 and bg < 0.08:
-        hypothesis = "Texto no lingüístico"
-    elif ttr < 0.25:
-        hypothesis = "Texto repetitivo"
+    bi = ngram_concentration(text, 2)
+    tri = ngram_concentration(text, 3)
 
     lfv1 = lfv_phase_1(words)
     lfv2 = lfv_phase_2(words)
     lfv3 = lfv_phase_3(lfv2)
     lfv4 = lfv_phase_4(lfv2)
 
-    db = SessionLocal()
-    a = Analysis(
+    hypothesis = "El texto presenta estructura funcional no aleatoria."
+
+    analysis = Analysis(
         source=source,
         text=text,
         hypothesis=hypothesis,
         entropy=ent,
         zipf=zipf,
         ttr=ttr,
-        bigram_conc=bg,
-        trigram_conc=tg,
+        bigram_conc=bi,
+        trigram_conc=tri,
         lfv_state=lfv1,
-        lfv_sequence=",".join(lfv2),
+        lfv_sequence=str(lfv2),
         lfv_translation=lfv3,
         lfv_semantic=lfv4,
         user_id=user_id
     )
-    db.add(a)
+
+    db.add(analysis)
     db.commit()
-    db.refresh(a)
+    db.refresh(analysis)
     db.close()
 
     return {
-        "id": a.id,
-        "hipotesis": hypothesis,
-        "entropia": ent,
+        "id": analysis.id,
+        "entropy": ent,
+        "zipf": zipf,
+        "ttr": ttr,
+        "bigram": bi,
+        "trigram": tri,
         "lfv_fase_1": lfv1,
         "lfv_fase_2": lfv2,
         "lfv_fase_3": lfv3,
-        "lfv_fase_4": lfv4
+        "lfv_fase_4": lfv4,
+        "hipotesis": hypothesis
     }
 
 # =========================
@@ -222,7 +231,11 @@ def analyze_and_store(text, source, user_id=None):
 
 @app.post("/analyze")
 def analyze(data: dict):
-    return analyze_and_store(data["text"], "text", data.get("user_id"))
+    return analyze_and_store(
+        data["text"],
+        "text",
+        data.get("user_id")
+    )
 
 @app.post("/ocr")
 async def ocr(file: UploadFile = File(...)):
@@ -247,7 +260,12 @@ def comment(data: dict):
 def compare_semantic(data: dict):
     a = analyze_and_store(data["textA"], "compare")
     b = analyze_and_store(data["textB"], "compare")
-    return {"comparacion_lfv": lfv_phase_5(a["lfv_fase_2"], b["lfv_fase_2"])}
+    return {
+        "comparacion_lfv": lfv_phase_5(
+            a["lfv_fase_2"],
+            b["lfv_fase_2"]
+        )
+    }
 
 @app.get("/analysis/{id}")
 def get_analysis(id: int):
@@ -265,11 +283,19 @@ def get_analysis(id: int):
 @app.get("/feed")
 def feed(limit: int = 20):
     db = SessionLocal()
-    rows = db.query(Analysis).order_by(Analysis.created_at.desc()).limit(limit).all()
+    rows = (
+        db.query(Analysis)
+        .order_by(Analysis.created_at.desc())
+        .limit(limit)
+        .all()
+    )
     db.close()
-    return [{
-        "id": r.id,
-        "texto_preview": r.text[:200] + ("…" if len(r.text) > 200 else ""),
-        "hipotesis": r.hypothesis,
-        "lfv_fase_4": r.lfv_semantic
-    } for r in rows]
+    return [
+        {
+            "id": r.id,
+            "texto_preview": r.text[:200] + ("…" if len(r.text) > 200 else ""),
+            "hipotesis": r.hypothesis,
+            "lfv_fase_4": r.lfv_semantic
+        }
+        for r in rows
+    ]
