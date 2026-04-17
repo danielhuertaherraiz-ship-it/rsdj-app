@@ -6,8 +6,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#4f46e5">
 
-<!-- ✅ PWA: MANIFEST (AÑADIDO, NO BORRA NADA) -->
-<link rel="manifest" href ===== BASE ===== */
+<!-- ✅ PWA: MANIFEST (CORREGIDO, NO BORRA NADA) -->
+<link rel="manifest" href="manifest.json">
+
+<!-- ✅ Chart.js (AÑADIDO) -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+/* ===== BASE ===== */
 body {
   font-family: system-ui;
   background:#f4f6f8;
@@ -123,6 +129,13 @@ No traducciones · No significados ocultos.
   Esperando análisis…
 </div>
 
+<!-- ✅ VISUALIZACIÓN (AÑADIDO) -->
+<div class="card" id="chartCard" style="display:none;">
+  <h3>📊 Perfil estructural</h3>
+  <canvas id="structureChart"></canvas>
+  <p class="meta">Representación visual de métricas estructurales.</p>
+</div>
+
 <h3>📰 Exploraciones recientes</h3>
 <div id="feed"></div>
 
@@ -133,19 +146,39 @@ Analiza únicamente estructura y regularidad simbólica.
 
 <script>
 const API = "https://rsdj-api.onrender.com";
+let chartInstance = null;
 
 /* ===== MICRO-LECCIONES ===== */
 function generateMicroLesson(a){
-  if(a.entropy < 3){
-    return "📊 Entropía baja → el orden de los símbolos importa.";
-  }
-  if(a.lfv_fase_1 === "densificacion"){
-    return "🔁 Se repiten patrones → estructura local.";
-  }
-  if(a.lfv_fase_1 === "expansion"){
-    return "🧠 Variación creciente → desarrollo estructural.";
-  }
+  if(a.entropy < 3) return "📊 Entropía baja → el orden importa.";
+  if(a.lfv_fase_1 === "densificacion") return "🔁 Patrones repetidos → estructura local.";
+  if(a.lfv_fase_1 === "expansion") return "🧠 Variación creciente → desarrollo estructural.";
   return "🧩 Dinámica mixta → sistema no trivial.";
+}
+
+/* ===== GRÁFICO (AÑADIDO) ===== */
+function renderChart(d){
+  const ctx = document.getElementById("structureChart");
+
+  if(chartInstance) chartInstance.destroy();
+
+  chartInstance = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: ["Entropía", "TTR", "Bigramas", "Trigramas"],
+      datasets: [{
+        label: "Métricas estructurales",
+        data: [d.entropy, d.ttr, d.bigram, d.trigram],
+        backgroundColor: ["#6366f1", "#4f46e5", "#818cf8", "#a5b4fc"]
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: { y: { beginAtZero: true } }
+    }
+  });
+
+  document.getElementById("chartCard").style.display = "block";
 }
 
 /* ===== ANALYZE ===== */
@@ -159,36 +192,24 @@ function analyze(){
   })
   .then(r => r.json())
   .then(d => {
-
     result.innerHTML = `
       <h3>Resultado estructural</h3>
       <p><b>${d.hipotesis}</b></p>
       <p class="meta">${d.lfv_fase_4}</p>
-      <div>
-        <span class="badge">Entropía ${d.entropy}</span>
-        <span class="badge">TTR ${d.ttr}</span>
-        <span class="badge">Bigramas ${d.bigram}</span>
-        <span class="badge">Trigramas ${d.trigram}</span>
-      </div>
-      <div class="meta">Describe estructura, no significado.</div>
     `;
-
     lessonText.innerText = generateMicroLesson(d);
     microLesson.style.display = "block";
-
+    renderChart(d);
     loadFeed();
   });
 }
 
 /* ===== REACCIONES ===== */
-function sendReaction(analysisId, type){
+function sendReaction(id, type){
   fetch(API + "/react", {
     method:"POST",
     headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify({
-      analysis_id: analysisId,
-      type: type
-    })
+    body: JSON.stringify({ analysis_id:id, type:type })
   });
 }
 
@@ -196,44 +217,24 @@ function sendReaction(analysisId, type){
 async function loadFeed(){
   const r = await fetch(API + "/feed");
   const data = await r.json();
-
   feed.innerHTML = "";
-
   data.forEach(p => {
-    const div = document.createElement("div");
-    div.className = "card feed-card";
-
-    div.innerHTML = `
-      <p><b>${p.hipotesis}</b></p>
-      <p>${p.texto_preview}</p>
-      <p class="meta">${p.lfv_fase_4}</p>
-
-      <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
-        <button class="secondary"
-          onclick="sendReaction(${p.id}, 'learned')">
-          🧠 Aprendí algo
-        </button>
-        <button class="secondary"
-          onclick="sendReaction(${p.id}, 'interesting')">
-          ⭐ Interesante
-        </button>
-        <button class="secondary">
-          🔍 Explorar
-        </button>
-      </div>
-    `;
-
-    feed.appendChild(div);
+    feed.innerHTML += `
+      <div class="card feed-card">
+        <b>${p.hipotesis}</b>
+        <p>${p.texto_preview}</p>
+        <p class="meta">${p.lfv_fase_4}</p>
+        <button class="secondary" onclick="sendReaction(${p.id},'learned')">🧠 Aprendí algo</button>
+        <button class="secondary" onclick="sendReaction(${p.id},'interesting')">⭐ Interesante</button>
+      </div>`;
   });
 }
 
 loadFeed();
 
-/* ✅ PWA: REGISTRO SERVICE WORKER (AÑADIDO, NO AFECTA A NADA) */
+/* ✅ PWA: SERVICE WORKER */
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("sw.js")
-    .then(() => console.log("Service Worker registrado"))
-    .catch(err => console.log("SW error", err));
+  navigator.serviceWorker.register("sw.js");
 }
 </script>
 
