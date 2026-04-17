@@ -1,7 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
+<html lang<meta charset="UTF-8"><html lang="es">
 <title>LFV Platform — Explora estructura</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#4f46e5">
@@ -17,9 +15,7 @@ body {
   margin:0;
   padding:1rem;
 }
-
 h1,h2,h3 { margin-top:0; }
-
 .card {
   background:white;
   padding:1rem;
@@ -27,7 +23,6 @@ h1,h2,h3 { margin-top:0; }
   margin-bottom:1rem;
   box-shadow:0 6px 18px rgba(0,0,0,.06);
 }
-
 textarea {
   width:100%;
   border-radius:10px;
@@ -35,7 +30,6 @@ textarea {
   padding:.6rem;
   font-size:1rem;
 }
-
 button {
   padding:.6rem 1rem;
   border:none;
@@ -44,17 +38,11 @@ button {
   color:white;
   cursor:pointer;
 }
-
 button.secondary {
   background:#e5e7eb;
   color:#111;
 }
-
-.meta {
-  font-size:.85em;
-  color:#555;
-}
-
+.meta { font-size:.85em; color:#555; }
 .story {
   background:linear-gradient(135deg,#6366f1,#4f46e5);
   color:white;
@@ -69,17 +57,11 @@ button.secondary {
   gap:.5rem;
   margin-bottom:1rem;
 }
-.nav button {
-  flex:1;
-}
+.nav button { flex:1; }
 
 /* ===== VIEWS ===== */
-.view {
-  display:none;
-}
-.view.active {
-  display:block;
-}
+.view { display:none; }
+.view.active { display:block; }
 </style>
 </head>
 
@@ -87,27 +69,22 @@ button.secondary {
 
 <h1>🧠 LFV Platform</h1>
 
-<!-- ✅ NAVBAR (AÑADIDO) -->
+<!-- ✅ NAVBAR -->
 <div class="nav">
-  <button onclick="showView('home')">🏠 Inicio</button>
-  <button onclick="showView('analyze')">✍️ Analizar</button>
-  <button onclick="showView('explore')">🔍 Explorar</button>
-  <button onclick="showView('profile')">👤 Perfil</button>
+  <button onclick="goTo('home')">🏠 Inicio</button>
+  <button onclick="goTo('analyze')">✍️ Analizar</button>
+  <button onclick="goTo('explore')">🔍 Explorar</button>
+  <button onclick="goTo('profile')">👤 Perfil</button>
 </div>
 
-<!-- ===================== -->
-<!-- 🏠 HOME / FEED -->
-<!-- ===================== -->
+<!-- HOME -->
 <div id="view-home" class="view active">
   <h3>📰 Exploraciones recientes</h3>
   <div id="feed"></div>
 </div>
 
-<!-- ===================== -->
-<!-- ✍️ ANALYZE -->
-<!-- ===================== -->
+<!-- ANALYZE -->
 <div id="view-analyze" class="view">
-
   <div class="card">
     <h3>Analiza un texto</h3>
     <textarea id="textInput" rows="4" placeholder="Introduce texto…"></textarea>
@@ -132,11 +109,8 @@ button.secondary {
   </div>
 </div>
 
-<!-- ===================== -->
-<!-- 👤 PROFILE -->
-<!-- ===================== -->
+<!-- PROFILE -->
 <div id="view-profile" class="view">
-
   <div class="card">
     <h3>👤 Mi perfil</h3>
     <input id="usernameInput"
@@ -152,9 +126,7 @@ button.secondary {
   </div>
 </div>
 
-<!-- ===================== -->
-<!-- 🔍 EXPLORE -->
-<!-- ===================== -->
+<!-- EXPLORE -->
 <div id="view-explore" class="view">
   <div class="card">
     <h3>🔍 Explorar</h3>
@@ -170,11 +142,21 @@ const API = "https://rsdj-api.onrender.com";
 let chartInstance = null;
 let currentUser = null;
 
-/* ===== SPA NAV ===== */
+/* ===== ROUTER SPA (AÑADIDO) ===== */
+function goTo(view){
+  location.hash = view;
+}
 function showView(name){
   document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
-  document.getElementById("view-"+name).classList.add("active");
+  const el = document.getElementById("view-"+name);
+  if(el) el.classList.add("active");
 }
+function router(){
+  const hash = location.hash.replace("#","") || "home";
+  showView(hash);
+}
+window.addEventListener("hashchange", router);
+router();
 
 /* ===== USUARIO ===== */
 function saveUser(){
@@ -188,6 +170,7 @@ function saveUser(){
     currentUser = u;
     localStorage.setItem("lfv_user", JSON.stringify(u));
     userStatus.innerText = "@" + u.username;
+    loadMyAnalyses();
   });
 }
 
@@ -195,9 +178,10 @@ const stored = localStorage.getItem("lfv_user");
 if(stored){
   currentUser = JSON.parse(stored);
   userStatus.innerText = "@" + currentUser.username;
+  loadMyAnalyses();
 }
 
-/* ===== ANALYSIS ===== */
+/* ===== ANALYZE ===== */
 function analyze(){
   fetch(API + "/analyze", {
     method:"POST",
@@ -241,6 +225,7 @@ async function loadFeed(){
   });
 }
 
+/* ===== MIS ANALISIS ===== */
 async function loadMyAnalyses(){
   if(!currentUser) return;
   const r = await fetch(API + "/user/" + currentUser.id + "/analyses");
@@ -261,3 +246,4 @@ loadFeed();
 
 </body>
 </html>
+<head>
