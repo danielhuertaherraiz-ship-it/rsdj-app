@@ -77,12 +77,11 @@ class Comment(Base):
     content = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-# ✅ NUEVO (se suma, no sustituye)
 class Reaction(Base):
     __tablename__ = "reactions"
     id = Column(Integer, primary_key=True)
     analysis_id = Column(Integer)
-    type = Column(String)  # learned | interesting
+    type = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 Base.metadata.create_all(bind=engine)
@@ -136,10 +135,7 @@ def lfv_phase_1(words):
     return "estabilizacion"
 
 def lfv_phase_2(words, window=20):
-    return [
-        lfv_phase_1(words[i:i+window])
-        for i in range(0, len(words), window)
-    ]
+    return [lfv_phase_1(words[i:i+window]) for i in range(0, len(words), window)]
 
 def lfv_phase_3(seq):
     if not seq:
@@ -284,24 +280,21 @@ def get_analysis(id: int):
 @app.get("/feed")
 def feed(limit: int = 20):
     db = SessionLocal()
-    rows = (
-        db.query(Analysis)
-        .order_by(Analysis.created_at.desc())
-        .limit(limit)
-        .all()
-    )
+    rows = db.query(Analysis).order_by(Analysis.created_at.desc()).limit(limit).all()
+    users = {u.id: u.username for u in db.query(User).all()}
     db.close()
     return [
         {
             "id": r.id,
             "texto_preview": r.text[:200] + ("…" if len(r.text) > 200 else ""),
             "hipotesis": r.hypothesis,
-            "lfv_fase_4": r.lfv_semantic
+            "lfv_fase_4": r.lfv_semantic,
+            "user_id": r.user_id,
+            "username": users.get(r.user_id)
         }
         for r in rows
     ]
 
-# ✅ REACCIONES
 @app.post("/react")
 def react(data: dict):
     db = SessionLocal()
@@ -317,15 +310,25 @@ def react(data: dict):
 @app.get("/reactions/{analysis_id}")
 def get_reactions(analysis_id: int):
     db = SessionLocal()
-    rows = (
-        db.query(Reaction)
-        .filter(Reaction.analysis_id == analysis_id)
-        .all()
-    )
+    rows = db.query(Reaction).filter(Reaction.analysis_id == analysis_id).all()
     db.close()
-
     counts = {}
     for r in rows:
         counts[r.type] = counts.get(r.type, 0) + 1
-
     return counts
+
+# =========================
+# USERS (AÑADIDO)
+# =========================
+
+@app.post("/user")
+def create_or_get_user(data: dict):
+    db = SessionLocal()
+    user = db.query(User).filter(User.username == data["username"]).first()
+    if not user:
+        user = User(username=data["username"])
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    db.close()
+    return {"id": user.id, "username": user.username}
