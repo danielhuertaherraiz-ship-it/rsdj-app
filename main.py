@@ -95,7 +95,10 @@ def entropy(text: str) -> float:
         return 0.0
     freq = Counter(text)
     total = len(text)
-    return round(-sum((c / total) * math.log2(c / total) for c in freq.values()), 3)
+    return round(
+        -sum((c / total) * math.log2(c / total) for c in freq.values()),
+        3
+    )
 
 def zipf_score(words):
     if len(words) < 10:
@@ -224,7 +227,7 @@ def analyze_and_store(text, source, user_id=None):
     }
 
 # =========================
-# ENDPOINTS (TUS ENDPOINTS)
+# ENDPOINTS
 # =========================
 
 @app.post("/analyze")
@@ -255,7 +258,10 @@ def compare_semantic(data: dict):
     a = analyze_and_store(data["textA"], "compare")
     b = analyze_and_store(data["textB"], "compare")
     return {
-        "comparacion_lfv": lfv_phase_5(a["lfv_fase_2"], b["lfv_fase_2"])
+        "comparacion_lfv": lfv_phase_5(
+            a["lfv_fase_2"],
+            b["lfv_fase_2"]
+        )
     }
 
 @app.get("/analysis/{id}")
@@ -274,7 +280,12 @@ def get_analysis(id: int):
 @app.get("/feed")
 def feed(limit: int = 20):
     db = SessionLocal()
-    rows = db.query(Analysis).order_by(Analysis.created_at.desc()).limit(limit).all()
+    rows = (
+        db.query(Analysis)
+        .order_by(Analysis.created_at.desc())
+        .limit(limit)
+        .all()
+    )
     db.close()
     return [
         {
@@ -301,15 +312,21 @@ def react(data: dict):
 @app.get("/reactions/{analysis_id}")
 def get_reactions(analysis_id: int):
     db = SessionLocal()
-    rows = db.query(Reaction).filter(Reaction.analysis_id == analysis_id).all()
+    rows = (
+        db.query(Reaction)
+        .filter(Reaction.analysis_id == analysis_id)
+        .all()
+    )
     db.close()
+
     counts = {}
     for r in rows:
         counts[r.type] = counts.get(r.type, 0) + 1
+
     return counts
 
 # =========================
-# AÑADIDO: MIS ANALISIS
+# ✅ AÑADIDO: MIS ANALISIS
 # =========================
 
 @app.get("/user/{user_id}/analyses")
@@ -333,3 +350,23 @@ def user_analyses(user_id: int):
         }
         for r in rows
     ]
+
+# =========================
+# ✅ AÑADIDO: CONTADOR DE REACCIONES
+# =========================
+
+@app.get("/analysis/{analysis_id}/reactions")
+def analysis_reactions(analysis_id: int):
+    db = SessionLocal()
+    rows = (
+        db.query(Reaction)
+        .filter(Reaction.analysis_id == analysis_id)
+        .all()
+    )
+    db.close()
+
+    counts = {}
+    for r in rows:
+        counts[r.type] = counts.get(r.type, 0) + 1
+
+    return counts
