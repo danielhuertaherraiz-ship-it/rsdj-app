@@ -1,5 +1,10 @@
 <!DOCTYPE html>
-="#4f46e5"><html lang="es">
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>LFV Platform — Explora estructura</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#4f46e5">
 
 <link rel="manifest" href="manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -45,23 +50,8 @@ button.secondary {
   color:#111;
 }
 
-.badge {
-  background:#eef2ff;
-  color:#3730a3;
-  padding:.2rem .6rem;
-  border-radius:999px;
-  font-size:.75em;
-  margin-right:.3rem;
-  margin-bottom:.3rem;
-  display:inline-block;
-}
-
 .feed-card {
   cursor:pointer;
-  transition:transform .15s;
-}
-.feed-card:hover {
-  transform:scale(1.01);
 }
 
 .meta {
@@ -74,15 +64,6 @@ button.secondary {
   color:white;
   padding:1rem;
   border-radius:14px;
-  margin-bottom:1rem;
-}
-
-@media (max-width: 768px) {
-  body { padding:.5rem; }
-  h1 { font-size:1.6rem; }
-  h3 { font-size:1.1rem; }
-  button { width:100%; margin-top:.5rem; }
-  .card { padding:.9rem; }
 }
 </style>
 </head>
@@ -90,12 +71,8 @@ button.secondary {
 <body>
 
 <h1>🧠 LFV Platform</h1>
-<p>
-Explora la <b>estructura</b> de los textos.<br>
-No traducciones · No significados ocultos.
-</p>
 
-<!-- 👤 PERFIL USUARIO (AÑADIDO) -->
+<!-- 👤 PERFIL -->
 <div class="card">
   <h3>👤 Mi perfil</h3>
   <input id="usernameInput" placeholder="elige un nombre"
@@ -105,7 +82,7 @@ No traducciones · No significados ocultos.
   <p class="meta" id="userStatus"></p>
 </div>
 
-<!-- 📚 MIS ANALISIS (AÑADIDO) -->
+<!-- 📚 MIS ANALISIS -->
 <div class="card" id="profileCard" style="display:none;">
   <h3>📚 Mis análisis</h3>
   <div id="myAnalyses"></div>
@@ -114,46 +91,33 @@ No traducciones · No significados ocultos.
 <!-- ANALYZE -->
 <div class="card">
   <h3>Analiza un texto</h3>
-  <textarea id="textInput" rows="4" placeholder="Introduce texto…"></textarea>
+  <textarea id="textInput" rows="4"></textarea>
   <button onclick="analyze()">Analizar</button>
 </div>
 
-<!-- MICRO-LECCIÓN -->
 <div class="story" id="microLesson" style="display:none;">
-  <b>🧠 Micro‑lección</b>
   <p id="lessonText"></p>
 </div>
 
-<!-- RESULTADO -->
 <div class="card" id="result">Esperando análisis…</div>
 
-<!-- GRÁFICO -->
 <div class="card" id="chartCard" style="display:none;">
-  <h3>📊 Perfil estructural</h3>
   <canvas id="structureChart"></canvas>
 </div>
 
-<!-- EXPLORAR -->
 <div class="card" id="exploreCard" style="display:none;">
-  <h3>🔍 Explorar estructura</h3>
   <p id="exploreText"></p>
 </div>
 
 <h3>📰 Exploraciones recientes</h3>
 <div id="feed"></div>
 
-<footer class="meta">
-Esta plataforma no traduce textos ni asigna significado semántico.<br>
-Analiza únicamente estructura y regularidad simbólica.
-</footer>
-
 <script>
 const API = "https://rsdj-api.onrender.com";
+let currentUser = null;
 let chartInstance = null;
 
 /* ===== USUARIO ===== */
-let currentUser = null;
-
 function saveUser(){
   fetch(API + "/user", {
     method:"POST",
@@ -164,19 +128,18 @@ function saveUser(){
   .then(u=>{
     currentUser = u;
     localStorage.setItem("lfv_user", JSON.stringify(u));
-    userStatus.innerText = "Conectado como @" + u.username;
+    userStatus.innerText = "@" + u.username;
   });
 }
 
 const stored = localStorage.getItem("lfv_user");
 if(stored){
   currentUser = JSON.parse(stored);
-  userStatus.innerText = "Conectado como @" + currentUser.username;
+  userStatus.innerText = "@" + currentUser.username;
 }
 
 /* ===== PERFIL ===== */
 function toggleProfile(){
-  if(!currentUser) return;
   profileCard.style.display =
     profileCard.style.display === "none" ? "block" : "none";
   if(profileCard.style.display === "block") loadMyAnalyses();
@@ -186,47 +149,25 @@ async function loadMyAnalyses(){
   const r = await fetch(API + "/user/" + currentUser.id + "/analyses");
   const data = await r.json();
   myAnalyses.innerHTML = "";
-  data.forEach(a=>{
+
+  for(const a of data){
     myAnalyses.innerHTML += `
       <div class="card">
         <b>${a.hipotesis}</b>
         <p>${a.texto_preview}</p>
         <p class="meta">${a.lfv_fase_4}</p>
-      </div>`;
-  });
-}
-
-/* ===== MICRO-LECCIÓN ===== */
-function generateMicroLesson(a){
-  if(a.entropy < 3) return "📊 Entropía baja → el orden importa.";
-  if(a.lfv_fase_1 === "densificacion") return "🔁 Patrones repetidos → estructura local.";
-  if(a.lfv_fase_1 === "expansion") return "🧠 Variación creciente → desarrollo estructural.";
-  return "🧩 Dinámica mixta → sistema no trivial.";
-}
-
-/* ===== EXPLORAR ===== */
-function generateExploreExplanation(d){
-  if(d.entropy < 3 && d.bigram > 0.2){
-    return "Concentración local de patrones superior al azar.";
+        <p class="meta" id="reactions-${a.id}">Cargando reacciones…</p>
+      </div>
+    `;
+    loadAnalysisReactions(a.id, document.getElementById("reactions-"+a.id));
   }
-  if(d.lfv_fase_1 === "densificacion"){
-    return "Repetición estructural persistente.";
-  }
-  return "Sistema estructurado sin interpretación semántica.";
 }
 
-/* ===== GRÁFICO ===== */
-function renderChart(d){
-  const ctx = document.getElementById("structureChart");
-  if(chartInstance) chartInstance.destroy();
-  chartInstance = new Chart(ctx,{
-    type:"bar",
-    data:{
-      labels:["Entropía","TTR","Bigramas","Trigramas"],
-      datasets:[{data:[d.entropy,d.ttr,d.bigram,d.trigram]}]
-    }
-  });
-  chartCard.style.display="block";
+/* ===== REACCIONES PERFIL ===== */
+async function loadAnalysisReactions(id, el){
+  const r = await fetch(API + "/analysis/" + id + "/reactions");
+  const data = await r.json();
+  el.innerText = `🧠 ${data.learned || 0}   ⭐ ${data.interesting || 0}`;
 }
 
 /* ===== ANALYZE ===== */
@@ -242,11 +183,6 @@ function analyze(){
   .then(r=>r.json())
   .then(d=>{
     result.innerHTML = `<b>${d.hipotesis}</b><br>${d.lfv_fase_4}`;
-    lessonText.innerText = generateMicroLesson(d);
-    microLesson.style.display="block";
-    exploreText.innerText = generateExploreExplanation(d);
-    exploreCard.style.display="block";
-    renderChart(d);
     loadFeed();
   });
 }
@@ -270,24 +206,14 @@ async function loadFeed(){
         <b>${p.hipotesis}</b>
         <p>${p.texto_preview}</p>
         <p class="meta">${p.lfv_fase_4}</p>
-        <button class="secondary" onclick="sendReaction(${p.id},'learned')">🧠 Aprendí algo</button>
-        <button class="secondary" onclick="sendReaction(${p.id},'interesting')">⭐ Interesante</button>
+        <button class="secondary" onclick="sendReaction(${p.id},'learned')">🧠</button>
+        <button class="secondary" onclick="sendReaction(${p.id},'interesting')">⭐</button>
       </div>`;
   });
 }
 
 loadFeed();
-
-/* ✅ PWA */
-if("serviceWorker" in navigator){
-  navigator.serviceWorker.register("sw.js");
-}
 </script>
 
 </body>
 </html>
-``
-<head>
-<meta charset="UTF-8">
-<title>LFV Platform — Explora estructura</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
