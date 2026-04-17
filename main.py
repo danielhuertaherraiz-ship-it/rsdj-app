@@ -62,13 +62,6 @@ class Analysis(Base):
     user_id = Column(Integer)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-class Like(Base):
-    __tablename__ = "likes"
-    id = Column(Integer, primary_key=True)
-    analysis_id = Column(Integer)
-    user_id = Column(Integer)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
 class Comment(Base):
     __tablename__ = "comments"
     id = Column(Integer, primary_key=True)
@@ -214,38 +207,6 @@ async def ocr(file: UploadFile = File(...)):
     text = pytesseract.image_to_string(image, lang="spa+eng")
     return analyze_and_store(text, "ocr")
 
-@app.post("/comment")
-def comment(data: dict):
-    db = SessionLocal()
-    c = Comment(
-        analysis_id=data["analysis_id"],
-        user_id=data.get("user_id"),
-        content=data["content"]
-    )
-    db.add(c)
-    db.commit()
-    db.close()
-    return {"status": "ok"}
-
-@app.post("/compare_semantic")
-def compare_semantic(data: dict):
-    a = analyze_and_store(data["textA"], "compare")
-    b = analyze_and_store(data["textB"], "compare")
-    return {"comparacion_lfv": lfv_phase_5(a["lfv_fase_2"], b["lfv_fase_2"])}
-
-@app.get("/analysis/{id}")
-def get_analysis(id: int):
-    db = SessionLocal()
-    r = db.query(Analysis).filter(Analysis.id == id).first()
-    db.close()
-    return {
-        "id": r.id,
-        "texto": r.text,
-        "hipotesis": r.hypothesis,
-        "lfv_fase_3": r.lfv_translation,
-        "lfv_fase_4": r.lfv_semantic
-    }
-
 @app.get("/feed")
 def feed(limit: int = 20):
     db = SessionLocal()
@@ -256,7 +217,8 @@ def feed(limit: int = 20):
             "id": r.id,
             "texto_preview": r.text[:200] + ("…" if len(r.text) > 200 else ""),
             "hipotesis": r.hypothesis,
-            "lfv_fase_4": r.lfv_semantic
+            "lfv_fase_4": r.lfv_semantic,
+            "user_id": r.user_id
         }
         for r in rows
     ]
@@ -272,16 +234,6 @@ def react(data: dict):
     db.commit()
     db.close()
     return {"status": "ok"}
-
-@app.get("/reactions/{analysis_id}")
-def get_reactions(analysis_id: int):
-    db = SessionLocal()
-    rows = db.query(Reaction).filter(Reaction.analysis_id == analysis_id).all()
-    db.close()
-    counts = {}
-    for r in rows:
-        counts[r.type] = counts.get(r.type, 0) + 1
-    return counts
 
 @app.get("/user/{user_id}/analyses")
 def user_analyses(user_id: int):
@@ -303,3 +255,34 @@ def user_analyses(user_id: int):
         }
         for r in rows
     ]
+
+@app.get("/user/{user_id}")
+def public_user_profile(user_id: int):
+    db = SessionLocal()
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        db.close()
+        return {"error": "Usuario no encontrado"}
+
+    rows = (
+        db.query(Analysis)
+        .filter(Analysis.user_id == user_id)
+        .order_by(Analysis.created_at.desc())
+        .all()
+    )
+    db.close()
+
+    return {
+        "id": user.id,
+        "username": user.username,
+        "analyses": [
+            {
+                "id": r.id,
+                "texto_preview": r.text[:200] + ("…" if len(r.text) > 200 else ""),
+                "hipotesis": r.hypothesis,
+                "lfv_fase_4": r.lfv_semantic,
+                "created_at": r.created_at.isoformat()
+            }
+            for r in rows
+        ]
+    }
