@@ -95,10 +95,7 @@ def entropy(text: str) -> float:
         return 0.0
     freq = Counter(text)
     total = len(text)
-    return round(
-        -sum((c / total) * math.log2(c / total) for c in freq.values()),
-        3
-    )
+    return round(-sum((c / total) * math.log2(c / total) for c in freq.values()), 3)
 
 def zipf_score(words):
     if len(words) < 10:
@@ -227,7 +224,7 @@ def analyze_and_store(text, source, user_id=None):
     }
 
 # =========================
-# ENDPOINTS
+# ENDPOINTS (TUS ENDPOINTS)
 # =========================
 
 @app.post("/analyze")
@@ -258,10 +255,7 @@ def compare_semantic(data: dict):
     a = analyze_and_store(data["textA"], "compare")
     b = analyze_and_store(data["textB"], "compare")
     return {
-        "comparacion_lfv": lfv_phase_5(
-            a["lfv_fase_2"],
-            b["lfv_fase_2"]
-        )
+        "comparacion_lfv": lfv_phase_5(a["lfv_fase_2"], b["lfv_fase_2"])
     }
 
 @app.get("/analysis/{id}")
@@ -281,16 +275,13 @@ def get_analysis(id: int):
 def feed(limit: int = 20):
     db = SessionLocal()
     rows = db.query(Analysis).order_by(Analysis.created_at.desc()).limit(limit).all()
-    users = {u.id: u.username for u in db.query(User).all()}
     db.close()
     return [
         {
             "id": r.id,
             "texto_preview": r.text[:200] + ("…" if len(r.text) > 200 else ""),
             "hipotesis": r.hypothesis,
-            "lfv_fase_4": r.lfv_semantic,
-            "user_id": r.user_id,
-            "username": users.get(r.user_id)
+            "lfv_fase_4": r.lfv_semantic
         }
         for r in rows
     ]
@@ -318,17 +309,27 @@ def get_reactions(analysis_id: int):
     return counts
 
 # =========================
-# USERS (AÑADIDO)
+# AÑADIDO: MIS ANALISIS
 # =========================
 
-@app.post("/user")
-def create_or_get_user(data: dict):
+@app.get("/user/{user_id}/analyses")
+def user_analyses(user_id: int):
     db = SessionLocal()
-    user = db.query(User).filter(User.username == data["username"]).first()
-    if not user:
-        user = User(username=data["username"])
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+    rows = (
+        db.query(Analysis)
+        .filter(Analysis.user_id == user_id)
+        .order_by(Analysis.created_at.desc())
+        .all()
+    )
     db.close()
-    return {"id": user.id, "username": user.username}
+
+    return [
+        {
+            "id": r.id,
+            "texto_preview": r.text[:200] + ("…" if len(r.text) > 200 else ""),
+            "hipotesis": r.hypothesis,
+            "lfv_fase_4": r.lfv_semantic,
+            "created_at": r.created_at.isoformat()
+        }
+        for r in rows
+    ]
