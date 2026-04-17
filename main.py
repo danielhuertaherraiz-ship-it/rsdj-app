@@ -1,5 +1,11 @@
 from fastapi import FastAPI, File, UploadFile
-from fastapi.middleware as npfrom fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
+from sqlalchemy.orm import sessionmaker, declarative_base
+from collections import Counter
+from datetime import datetime
+import math, io
+import numpy as np
 from PIL import Image
 import pytesseract
 
@@ -56,6 +62,21 @@ class Analysis(Base):
     user_id = Column(Integer)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class Like(Base):
+    __tablename__ = "likes"
+    id = Column(Integer, primary_key=True)
+    analysis_id = Column(Integer)
+    user_id = Column(Integer)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class Comment(Base):
+    __tablename__ = "comments"
+    id = Column(Integer, primary_key=True)
+    analysis_id = Column(Integer)
+    user_id = Column(Integer)
+    content = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 class Reaction(Base):
     __tablename__ = "reactions"
     id = Column(Integer, primary_key=True)
@@ -93,7 +114,7 @@ def ttr_score(words):
 def ngram_concentration(text, n, top_k=5):
     if len(text) < n:
         return 0.0
-    grams = [text[i:i+n] for i in range(len(text)-n+1)]
+    grams = [text[i:i+n] for i in range(len(text) - n + 1)]
     freq = Counter(grams)
     total = sum(freq.values())
     top = sum(c for _, c in freq.most_common(top_k))
@@ -139,6 +160,18 @@ def lfv_phase_4(seq):
         parts.append("La estructura se estabiliza.")
     return " ".join(parts)
 
+def lfv_phase_5(a, b):
+    if not a or not b:
+        return "No hay datos suficientes para comparar."
+    diff = []
+    if a.count("expansion") != b.count("expansion"):
+        diff.append("Diferente grado de expansión.")
+    if a.count("densificacion") != b.count("densificacion"):
+        diff.append("Diferente nivel de repetición.")
+    if not diff:
+        diff.append("Estructura muy similar.")
+    return " ".join(diff)
+
 # =========================
 # CORE
 # =========================
@@ -147,19 +180,30 @@ def analyze_and_store(text, source, user_id=None):
     db = SessionLocal()
     words = text.split()
 
+    ent = entropy(text)
+    zipf = zipf_score(words)
+    ttr = ttr_score(words)
+    bi = ngram_concentration(text, 2)
+    tri = ngram_concentration(text, 3)
+
+    lfv1 = lfv_phase_1(words)
+    lfv2 = lfv_phase_2(words)
+    lfv3 = lfv_phase_3(lfv2)
+    lfv4 = lfv_phase_4(lfv2)
+
     analysis = Analysis(
         source=source,
         text=text,
         hypothesis="El texto presenta estructura funcional no aleatoria.",
-        entropy=entropy(text),
-        zipf=zipf_score(words),
-        ttr=ttr_score(words),
-        bigram_conc=ngram_concentration(text, 2),
-        trigram_conc=ngram_concentration(text, 3),
-        lfv_state=lfv_phase_1(words),
-        lfv_sequence=str(lfv_phase_2(words)),
-        lfv_translation=lfv_phase_3(lfv_phase_2(words)),
-        lfv_semantic=lfv_phase_4(lfv_phase_2(words)),
+        entropy=ent,
+        zipf=zipf,
+        ttr=ttr,
+        bigram_conc=bi,
+        trigram_conc=tri,
+        lfv_state=lfv1,
+        lfv_sequence=str(lfv2),
+        lfv_translation=lfv3,
+        lfv_semantic=lfv4,
         user_id=user_id
     )
 
@@ -170,82 +214,159 @@ def analyze_and_store(text, source, user_id=None):
 
     return {
         "id": analysis.id,
-        "hipotesis": analysis.hypothesis,
-        "lfv_fase_4": analysis.lfv_semantic
+        "entropy": ent,
+        "zipf": zipf,
+        "ttr": ttr,
+        "bigram": bi,
+        "trigram": tri,
+        "lfv_fase_1": lfv1,
+        "lfv_fase_2": lfv2,
+        "lfv_fase_3": lfv3,
+        "lfv_fase_4": lfv4,
+        "hipotesis": analysis.hypothesis
     }
 
 # =========================
 # ENDPOINTS
 # =========================
 
-@app.post("/user")
-def create_user(data: dict):
-    db = SessionLocal()
-    user = db.query(User).filter(User.username == data["username"]).first()
-    if not user:
-        user = User(username=data["username"])
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-    db.close()
-    return {"id": user.id, "username": user.username}
-
 @app.post("/analyze")
 def analyze(data: dict):
     return analyze_and_store(data["text"], "text", data.get("user_id"))
 
+@app.post("/ocr")
+async def ocr(file: UploadFile = File(...)):
+    image = Image.open(io.BytesIO(await file.read()))
+    text = pytesseract.image_to_string(image, lang="spa+eng")
+    return analyze_and_store(text, "ocr")
+
+@app.post("/comment")
+def comment(data: dict):
+    db = SessionLocal()
+    c = Comment(
+        analysis_id=data["analysis_id"],
+        user_id=data.get("user_id"),
+        content=data["content"]
+    )
+    db.add(c)
+    db.commit()
+    db.close()
+    return {"status": "ok"}
+
+@app.post("/compare_semantic")
+def compare_semantic(data: dict):
+    a = analyze_and_store(data["textA"], "compare")
+    b = analyze_and_store(data["textB"], "compare")
+    return {
+        "comparacion_lfv": lfv_phase_5(
+            a["lfv_fase_2"],
+            b["lfv_fase_2"]
+        )
+    }
+
+@app.get("/analysis/{id}")
+def get_analysis(id: int):
+    db = SessionLocal()
+    r = db.query(Analysis).filter(Analysis.id == id).first()
+    db.close()
+    return {
+        "id": r.id,
+        "texto": r.text,
+        "hipotesis": r.hypothesis,
+        "lfv_fase_3": r.lfv_translation,
+        "lfv_fase_4": r.lfv_semantic
+    }
+
 @app.get("/feed")
 def feed(limit: int = 20):
     db = SessionLocal()
-    rows = db.query(Analysis).order_by(Analysis.created_at.desc()).limit(limit).all()
+    rows = (
+        db.query(Analysis)
+        .order_by(Analysis.created_at.desc())
+        .limit(limit)
+        .all()
+    )
     db.close()
     return [
         {
             "id": r.id,
             "texto_preview": r.text[:200] + ("…" if len(r.text) > 200 else ""),
             "hipotesis": r.hypothesis,
-            "lfv_fase_4": r.lfv_semantic,
-            "user_id": r.user_id
-        }
-        for r in rows
-    ]
-
-@app.get("/user/{user_id}/analyses")
-def user_analyses(user_id: int):
-    db = SessionLocal()
-    rows = db.query(Analysis).filter(
-        Analysis.user_id == user_id
-    ).order_by(Analysis.created_at.desc()).all()
-    db.close()
-    return [
-        {
-            "id": r.id,
-            "texto_preview": r.text[:200],
-            "hipotesis": r.hypothesis,
             "lfv_fase_4": r.lfv_semantic
         }
         for r in rows
     ]
 
-@app.get("/user/{user_id}")
-def public_user(user_id: int):
+@app.post("/react")
+def react(data: dict):
     db = SessionLocal()
-    user = db.query(User).filter(User.id == user_id).first()
-    rows = db.query(Analysis).filter(Analysis.user_id == user_id).all()
+    r = Reaction(
+        analysis_id=data["analysis_id"],
+        type=data["type"]
+    )
+    db.add(r)
+    db.commit()
     db.close()
-    return {
-        "username": user.username,
-        "analyses": [
-            {
-                "hipotesis": r.hypothesis,
-                "texto_preview": r.text[:200],
-                "lfv_fase_4": r.lfv_semantic
-            }
-            for r in rows
-        ]
-    }
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
-from sqlalchemy.orm import sessionmaker, declarative_base
-from collections import Counter
-from datetime import datetime
-import math, io
+    return {"status": "ok"}
+
+@app.get("/reactions/{analysis_id}")
+def get_reactions(analysis_id: int):
+    db = SessionLocal()
+    rows = (
+        db.query(Reaction)
+        .filter(Reaction.analysis_id == analysis_id)
+        .all()
+    )
+    db.close()
+
+    counts = {}
+    for r in rows:
+        counts[r.type] = counts.get(r.type, 0) + 1
+
+    return counts
+
+# =========================
+# ✅ AÑADIDO: MIS ANALISIS
+# =========================
+
+@app.get("/user/{user_id}/analyses")
+def user_analyses(user_id: int):
+    db = SessionLocal()
+    rows = (
+        db.query(Analysis)
+        .filter(Analysis.user_id == user_id)
+        .order_by(Analysis.created_at.desc())
+        .all()
+    )
+    db.close()
+
+    return [
+        {
+            "id": r.id,
+            "texto_preview": r.text[:200] + ("…" if len(r.text) > 200 else ""),
+            "hipotesis": r.hypothesis,
+            "lfv_fase_4": r.lfv_semantic,
+            "created_at": r.created_at.isoformat()
+        }
+        for r in rows
+    ]
+
+# =========================
+# ✅ AÑADIDO: CONTADOR DE REACCIONES
+# =========================
+
+@app.get("/analysis/{analysis_id}/reactions")
+def analysis_reactions(analysis_id: int):
+    db = SessionLocal()
+    rows = (
+        db.query(Reaction)
+        .filter(Reaction.analysis_id == analysis_id)
+        .all()
+    )
+    db.close()
+
+    counts = {}
+    for r in rows:
+        counts[r.type] = counts.get(r.type, 0) + 1
+
+    return counts
