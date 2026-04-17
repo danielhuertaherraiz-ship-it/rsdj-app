@@ -77,12 +77,12 @@ class Comment(Base):
     content = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-# ✅ NUEVO (NO sustituye a Like)
+# ✅ NUEVO (se suma, no sustituye)
 class Reaction(Base):
     __tablename__ = "reactions"
     id = Column(Integer, primary_key=True)
     analysis_id = Column(Integer)
-    type = Column(String)   # learned | interesting
+    type = Column(String)  # learned | interesting
     created_at = Column(DateTime, default=datetime.utcnow)
 
 Base.metadata.create_all(bind=engine)
@@ -182,7 +182,6 @@ def lfv_phase_5(a, b):
 
 def analyze_and_store(text, source, user_id=None):
     db = SessionLocal()
-
     words = text.split()
 
     ent = entropy(text)
@@ -263,7 +262,10 @@ def compare_semantic(data: dict):
     a = analyze_and_store(data["textA"], "compare")
     b = analyze_and_store(data["textB"], "compare")
     return {
-        "comparacion_lfv": lfv_phase_5(a["lfv_fase_2"], b["lfv_fase_2"])
+        "comparacion_lfv": lfv_phase_5(
+            a["lfv_fase_2"],
+            b["lfv_fase_2"]
+        )
     }
 
 @app.get("/analysis/{id}")
@@ -299,7 +301,7 @@ def feed(limit: int = 20):
         for r in rows
     ]
 
-# ✅ NUEVO ENDPOINT (NO INTERFIERE)
+# ✅ REACCIONES
 @app.post("/react")
 def react(data: dict):
     db = SessionLocal()
@@ -311,3 +313,19 @@ def react(data: dict):
     db.commit()
     db.close()
     return {"status": "ok"}
+
+@app.get("/reactions/{analysis_id}")
+def get_reactions(analysis_id: int):
+    db = SessionLocal()
+    rows = (
+        db.query(Reaction)
+        .filter(Reaction.analysis_id == analysis_id)
+        .all()
+    )
+    db.close()
+
+    counts = {}
+    for r in rows:
+        counts[r.type] = counts.get(r.type, 0) + 1
+
+    return counts
