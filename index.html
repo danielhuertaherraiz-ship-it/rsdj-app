@@ -6,8 +6,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#4f46e5">
 
-<style>
-/* ===== BASE ===== */
+<!-- ✅ PWA: MANIFEST (AÑADIDO, NO BORRA NADA) -->
+<link rel="manifest" href ===== BASE ===== */
 body {
   font-family: system-ui;
   background:#f4f6f8;
@@ -180,7 +180,7 @@ function analyze(){
   });
 }
 
-/* ===== REACCIONES (NUEVO, NO INTRUSIVO) ===== */
+/* ===== REACCIONES ===== */
 function sendReaction(analysisId, type){
   fetch(API + "/react", {
     method:"POST",
@@ -228,6 +228,13 @@ async function loadFeed(){
 }
 
 loadFeed();
+
+/* ✅ PWA: REGISTRO SERVICE WORKER (AÑADIDO, NO AFECTA A NADA) */
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js")
+    .then(() => console.log("Service Worker registrado"))
+    .catch(err => console.log("SW error", err));
+}
 </script>
 
 </body>
