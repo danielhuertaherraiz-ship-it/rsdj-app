@@ -50,10 +50,6 @@ button.secondary {
   color:#111;
 }
 
-.feed-card {
-  cursor:pointer;
-}
-
 .meta {
   font-size:.85em;
   color:#555;
@@ -64,6 +60,25 @@ button.secondary {
   color:white;
   padding:1rem;
   border-radius:14px;
+  margin-bottom:1rem;
+}
+
+/* ===== NAV ===== */
+.nav {
+  display:flex;
+  gap:.5rem;
+  margin-bottom:1rem;
+}
+.nav button {
+  flex:1;
+}
+
+/* ===== VIEWS ===== */
+.view {
+  display:none;
+}
+.view.active {
+  display:block;
 }
 </style>
 </head>
@@ -72,50 +87,94 @@ button.secondary {
 
 <h1>🧠 LFV Platform</h1>
 
-<!-- 👤 PERFIL -->
-<div class="card">
-  <h3>👤 Mi perfil</h3>
-  <input id="usernameInput" placeholder="elige un nombre"
-         style="width:100%;padding:.5rem;border-radius:10px;border:1px solid #ccc;">
-  <button onclick="saveUser()">Guardar perfil</button>
-  <button class="secondary" onclick="toggleProfile()">Ver mi perfil</button>
-  <p class="meta" id="userStatus"></p>
+<!-- ✅ NAVBAR (AÑADIDO) -->
+<div class="nav">
+  <button onclick="showView('home')">🏠 Inicio</button>
+  <button onclick="showView('analyze')">✍️ Analizar</button>
+  <button onclick="showView('explore')">🔍 Explorar</button>
+  <button onclick="showView('profile')">👤 Perfil</button>
 </div>
 
-<!-- 📚 MIS ANALISIS -->
-<div class="card" id="profileCard" style="display:none;">
-  <h3>📚 Mis análisis</h3>
-  <div id="myAnalyses"></div>
+<!-- ===================== -->
+<!-- 🏠 HOME / FEED -->
+<!-- ===================== -->
+<div id="view-home" class="view active">
+  <h3>📰 Exploraciones recientes</h3>
+  <div id="feed"></div>
 </div>
 
-<!-- ANALYZE -->
-<div class="card">
-  <h3>Analiza un texto</h3>
-  <textarea id="textInput" rows="4"></textarea>
-  <button onclick="analyze()">Analizar</button>
+<!-- ===================== -->
+<!-- ✍️ ANALYZE -->
+<!-- ===================== -->
+<div id="view-analyze" class="view">
+
+  <div class="card">
+    <h3>Analiza un texto</h3>
+    <textarea id="textInput" rows="4" placeholder="Introduce texto…"></textarea>
+    <button onclick="analyze()">Analizar</button>
+  </div>
+
+  <div class="story" id="microLesson" style="display:none;">
+    <b>🧠 Micro‑lección</b>
+    <p id="lessonText"></p>
+  </div>
+
+  <div class="card" id="result">Esperando análisis…</div>
+
+  <div class="card" id="chartCard" style="display:none;">
+    <h3>📊 Perfil estructural</h3>
+    <canvas id="structureChart"></canvas>
+  </div>
+
+  <div class="card" id="exploreCard" style="display:none;">
+    <h3>🔍 Explorar estructura</h3>
+    <p id="exploreText"></p>
+  </div>
 </div>
 
-<div class="story" id="microLesson" style="display:none;">
-  <p id="lessonText"></p>
+<!-- ===================== -->
+<!-- 👤 PROFILE -->
+<!-- ===================== -->
+<div id="view-profile" class="view">
+
+  <div class="card">
+    <h3>👤 Mi perfil</h3>
+    <input id="usernameInput"
+           placeholder="elige un nombre"
+           style="width:100%;padding:.5rem;border-radius:10px;border:1px solid #ccc;">
+    <button onclick="saveUser()">Guardar perfil</button>
+    <p class="meta" id="userStatus"></p>
+  </div>
+
+  <div class="card">
+    <h3>📚 Mis análisis</h3>
+    <div id="myAnalyses"></div>
+  </div>
 </div>
 
-<div class="card" id="result">Esperando análisis…</div>
-
-<div class="card" id="chartCard" style="display:none;">
-  <canvas id="structureChart"></canvas>
+<!-- ===================== -->
+<!-- 🔍 EXPLORE -->
+<!-- ===================== -->
+<div id="view-explore" class="view">
+  <div class="card">
+    <h3>🔍 Explorar</h3>
+    <p>
+      Aquí se muestran explicaciones guiadas sobre patrones,
+      estructura y regularidad no aleatoria.
+    </p>
+  </div>
 </div>
-
-<div class="card" id="exploreCard" style="display:none;">
-  <p id="exploreText"></p>
-</div>
-
-<h3>📰 Exploraciones recientes</h3>
-<div id="feed"></div>
 
 <script>
 const API = "https://rsdj-api.onrender.com";
-let currentUser = null;
 let chartInstance = null;
+let currentUser = null;
+
+/* ===== SPA NAV ===== */
+function showView(name){
+  document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
+  document.getElementById("view-"+name).classList.add("active");
+}
 
 /* ===== USUARIO ===== */
 function saveUser(){
@@ -138,39 +197,7 @@ if(stored){
   userStatus.innerText = "@" + currentUser.username;
 }
 
-/* ===== PERFIL ===== */
-function toggleProfile(){
-  profileCard.style.display =
-    profileCard.style.display === "none" ? "block" : "none";
-  if(profileCard.style.display === "block") loadMyAnalyses();
-}
-
-async function loadMyAnalyses(){
-  const r = await fetch(API + "/user/" + currentUser.id + "/analyses");
-  const data = await r.json();
-  myAnalyses.innerHTML = "";
-
-  for(const a of data){
-    myAnalyses.innerHTML += `
-      <div class="card">
-        <b>${a.hipotesis}</b>
-        <p>${a.texto_preview}</p>
-        <p class="meta">${a.lfv_fase_4}</p>
-        <p class="meta" id="reactions-${a.id}">Cargando reacciones…</p>
-      </div>
-    `;
-    loadAnalysisReactions(a.id, document.getElementById("reactions-"+a.id));
-  }
-}
-
-/* ===== REACCIONES PERFIL ===== */
-async function loadAnalysisReactions(id, el){
-  const r = await fetch(API + "/analysis/" + id + "/reactions");
-  const data = await r.json();
-  el.innerText = `🧠 ${data.learned || 0}   ⭐ ${data.interesting || 0}`;
-}
-
-/* ===== ANALYZE ===== */
+/* ===== ANALYSIS ===== */
 function analyze(){
   fetch(API + "/analyze", {
     method:"POST",
@@ -183,6 +210,8 @@ function analyze(){
   .then(r=>r.json())
   .then(d=>{
     result.innerHTML = `<b>${d.hipotesis}</b><br>${d.lfv_fase_4}`;
+    lessonText.innerText = "El texto muestra estructura no aleatoria.";
+    microLesson.style.display="block";
     loadFeed();
   });
 }
@@ -202,12 +231,27 @@ async function loadFeed(){
   feed.innerHTML="";
   data.forEach(p=>{
     feed.innerHTML+=`
-      <div class="card feed-card">
+      <div class="card">
         <b>${p.hipotesis}</b>
         <p>${p.texto_preview}</p>
         <p class="meta">${p.lfv_fase_4}</p>
         <button class="secondary" onclick="sendReaction(${p.id},'learned')">🧠</button>
         <button class="secondary" onclick="sendReaction(${p.id},'interesting')">⭐</button>
+      </div>`;
+  });
+}
+
+async function loadMyAnalyses(){
+  if(!currentUser) return;
+  const r = await fetch(API + "/user/" + currentUser.id + "/analyses");
+  const data = await r.json();
+  myAnalyses.innerHTML="";
+  data.forEach(a=>{
+    myAnalyses.innerHTML+=`
+      <div class="card">
+        <b>${a.hipotesis}</b>
+        <p>${a.texto_preview}</p>
+        <p class="meta">${a.lfv_fase_4}</p>
       </div>`;
   });
 }
